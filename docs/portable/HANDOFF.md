@@ -4,7 +4,7 @@
 
 开发分支：`portable/bootstrap-windows-ci`。草稿 [PR #1](https://github.com/kongshan4219/hermes-desktop-portable/pull/1)。默认 main 未合并，未公开发布。以 PR 当前 head 为最新源码 SHA；每个产物记录自身完整 SHA，不能用旧 run 代表当前 head。
 
-已验证最近源码提交 `ac69428123819b3f2ac0528dbc3f7e9250910f9f`：类型检查和 lint 成功，Windows 全平台套件失败。对应 [run 35983373767](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35983373767)。后续提交正在修正测试平台分工并加入跨机器测试、维护工作流和本目录文档，需重新查当前 run。
+已验证源码提交 `5e159e0765acc4504e609ac7449be0a0910b429f`：[run 35985127566](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35985127566)。Linux 完整 Electron 套件 2388 passed / 2 skipped；Windows 类型检查、lint、精选测试和打包通过，smoke 在子进程中文路径解码断言失败。下一提交修正测试编码，并增加固定 SHA256 的官方 PortableGit/OpenSSH，必须重新查询 PR head 对应运行。跨机器凭据与完整本地运行时作业尚未到达执行条件。
 
 实现位置：`electron/portable.ts` 集中路径/环境/迁移；entry 早期调用；main 处理凭据、更新器、协议注册及 sandbox；ssh-connection 注入私有 SSH options；bootstrap-runner 选择随包安装器；install.ps1 约束 Portable 的进程环境；scripts/portable 负责干净 ZIP、测试、同步和草稿发布。
 

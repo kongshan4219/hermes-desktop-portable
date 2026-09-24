@@ -22,7 +22,7 @@ Portable 优先于外部 `HERMES_HOME`、Desktop profile、Python/Codex/缓存�
 
 ## 依赖边界
 
-ZIP 包含官方 Electron、渲染器及原生 Desktop 模块，不包含预装 Python Agent、模型或个人数据。直接 URL 远程模式不需要开发工具链。SSH 模式当前依赖 Windows OpenSSH capability，尚未提供独立随包客户端；这仍是发布验收项。不会关闭 TLS 或 SSH 主机密钥校验。
+ZIP 包含官方 Electron、渲染器及原生 Desktop 模块，不包含预装 Python Agent、模型或个人数据。直接 URL 远程模式不需要开发工具链。SSH/Git/Bash 随包提供未修改的官方 PortableGit 2.55.0.5，下载 URL 与 SHA256 固定并记录在 metadata，不依赖系统安装的开发工具。该新增供应方式仍须匹配本次 CI 验收。不会关闭 TLS 或 SSH 主机密钥校验。
 
 首次使用本地模式会下载受管 Git、Python、Node、uv 及依赖。安装器随 ZIP 固定，checkout 固定到构建的 fork SHA，避免用 fork SHA 向官方仓库下载不存在的脚本。可选 ripgrep/ffmpeg 不通过 winget/choco/scoop 装入系统；独立便携依赖供应及相关能力仍待完成。便携、离线、全部依赖随包是三项不同目标。
 
@@ -46,4 +46,4 @@ Portable 禁止程序原地覆盖更新，避免被安装版或无补丁上游�
 
 若新版本迁移了数据格式，旧版本不一定可读。回退应恢复升级前备份，而不是用旧程序直接读取已迁移数据。
 
-保留上游 MIT 许可证及 Electron/Chromium 声明。当前未使用代码签名证书。候选 artifact 不是正式 Release；完整状态以匹配 SHA 的 CI 报告为准。
+保留上游 MIT 许可证、Electron/Chromium 声明，以及 PortableGit 的 GPL 和随附第三方许可证。PortableGit 原始源码：https://github.com/git-for-windows/git/tree/v2.55.0.windows.5 。当前未使用代码签名证书。候选 artifact 不是正式 Release；完整状态以匹配 SHA 的 CI 报告为准。

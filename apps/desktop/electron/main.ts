@@ -349,7 +349,7 @@ import {
 } from './pool-spawn-coordinator'
 import { createPoolStopper } from './pool-stop'
 import { poolTouchKeys } from './pool-touch-scope'
-import { portablePaths, portableSshOptions } from './portable'
+import { portablePaths, portableSshBinary, portableSshOptions } from './portable'
 import { createPortalSession } from './portal-session'
 import { createKeepAwake } from './power-save'
 import { readPreUpdateBackupEnabled } from './pre-update-backup-config'
@@ -10578,10 +10578,10 @@ async function reachablePreviewUrl(webContentsId: number, rawUrl: string): Promi
 }
 
 async function effectiveSshConfigFingerprint(sshConfig) {
-  const ssh =
-    process.platform === 'win32'
+  const ssh = portableSshBinary() ||
+    (process.platform === 'win32'
       ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH', 'ssh.exe')
-      : 'ssh'
+      : 'ssh')
 
   const args = ['-G', ...portableSshOptions()]
 
@@ -16070,10 +16070,10 @@ ipcMain.handle('hermes:ssh-config:resolve', async (_event, host) => {
     throw new Error('SSH host is required.')
   }
 
-  const ssh =
-    process.platform === 'win32'
+  const ssh = portableSshBinary() ||
+    (process.platform === 'win32'
       ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH', 'ssh.exe')
-      : 'ssh'
+      : 'ssh')
 
   return new Promise((resolve, reject) => {
     const child = spawn(ssh, ['-G', ...portableSshOptions(), '--', value], hiddenWindowsChildOptions({ stdio: ['ignore', 'pipe', 'pipe'] }))

@@ -138,6 +138,8 @@ export function initializePortable(app: App): PortablePaths | null {
     path.join(p.hermes, 'bin'),
     path.join(p.hermes, 'git', 'cmd'),
     path.join(p.hermes, 'git', 'bin'),
+    path.join(p.root, 'resources', 'portable', 'git', 'cmd'),
+    path.join(p.root, 'resources', 'portable', 'git', 'usr', 'bin'),
     path.join(windows, 'System32'),
     path.join(windows, 'System32', 'WindowsPowerShell', 'v1.0'),
     path.join(windows, 'System32', 'OpenSSH'),
@@ -155,6 +157,7 @@ export function initializePortable(app: App): PortablePaths | null {
     TMP: temp,
     PATH: managedPath.join(path.delimiter),
     HERMES_HOME: p.hermes,
+    HERMES_GIT_BASH_PATH: path.join(p.root, 'resources', 'portable', 'git', 'bin', 'bash.exe'),
     HERMES_DESKTOP_USER_DATA_DIR: p.desktop,
     HERMES_DESKTOP_IGNORE_EXISTING: '1',
     HERMES_DESKTOP_ISOLATED_BACKEND: '1',
@@ -219,4 +222,8 @@ export function portableSshOptions(): string[] {
     '-o', 'IdentitiesOnly=yes',
     '-o', 'IdentityFile=none'
   ]
+}
+
+export function portableSshBinary(): string | null {
+  return active ? path.join(active.root, 'resources', 'portable', 'git', 'usr', 'bin', 'ssh.exe') : null
 }

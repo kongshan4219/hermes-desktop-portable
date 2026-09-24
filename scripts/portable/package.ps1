@@ -15,6 +15,18 @@ Copy-Item "$source/*" $stage -Recurse
 New-Item -ItemType File "$stage/portable.flag" | Out-Null
 New-Item -ItemType Directory "$stage/resources/portable" -Force | Out-Null
 Copy-Item scripts/install.ps1 "$stage/resources/portable/install.ps1"
+# Unmodified official PortableGit includes OpenSSH, its DLLs, Bash and licenses.
+# Pin both origin release and SHA256; never package a runner's installed tools.
+$gitUrl = 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/PortableGit-2.55.0.5-64-bit.7z.exe'
+$gitHash = '5aa8a20f6e9abb2c755f0e73c91c687701a46b309ad84a0ca6509380fa4ae290'
+$gitArchive = Join-Path (Resolve-Path $Output) 'PortableGit.7z.exe'
+Invoke-WebRequest -Uri $gitUrl -OutFile $gitArchive
+if ((Get-FileHash $gitArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $gitHash) { throw 'PortableGit download digest mismatch' }
+$gitDest = Join-Path (Resolve-Path $stage) 'resources/portable/git'
+$extract = Start-Process -FilePath $gitArchive -ArgumentList "-o`"$gitDest`"", '-y' -Wait -PassThru -NoNewWindow
+if ($extract.ExitCode -ne 0 -or !(Test-Path "$gitDest/usr/bin/ssh.exe")) { throw 'PortableGit extraction failed' }
+Remove-Item $gitArchive
+
 Copy-Item LICENSE "$stage/LICENSE-Hermes.txt"
 Copy-Item docs/portable "$stage/docs" -Recurse
 $metadata = [ordered]@{
@@ -32,6 +44,7 @@ $metadata = [ordered]@{
   actionsRun = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
   actionsAttempt = $env:GITHUB_RUN_ATTEMPT
   environment = @{ imageOS=$env:ImageOS; imageVersion=$env:ImageVersion; node=(node --version); npm=(npm --version); electron=$desktop.devDependencies.electron; builder=$desktop.devDependencies.'electron-builder' }
+  bundledTools = @{ gitRelease='v2.55.0.windows.5'; archiveSha256=$gitHash; archiveUrl=$gitUrl; sourceUrl='https://github.com/git-for-windows/git/tree/v2.55.0.windows.5' }
   signed = $false
   acceptance = 'candidate; see matching test reports; not approved for public release'
 }

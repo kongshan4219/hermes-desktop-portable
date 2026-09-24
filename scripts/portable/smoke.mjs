@@ -75,7 +75,7 @@ async function launch(root, extra = {}) {
 }
 async function inspect(app) {
   return app.evaluate(({ app, session, safeStorage }) => {
-    const child = process.getBuiltinModule('child_process').execFileSync(process.env.ComSpec, ['/d', '/c', 'set'], { encoding: 'utf8' })
+    const child = process.getBuiltinModule('child_process').execFileSync(process.env.ComSpec, ['/d', '/u', '/c', 'set'], { encoding: 'utf16le' })
     return {
       paths: Object.fromEntries(['home', 'userData', 'sessionData', 'temp', 'logs', 'crashDumps'].map(k => [k, app.getPath(k)])),
       storage: session.defaultSession.getStoragePath(),
@@ -123,6 +123,15 @@ try {
   assert.equal(fs.existsSync(path.join(scratch, 'forbidden-hermes')), false)
   assert.equal(fs.existsSync(path.join(scratch, 'forbidden-desktop')), false)
   report.runtime = info
+  fs.writeFileSync(path.join(root, 'data', 'home', '.ssh', 'config'), 'Host portable-ci-host\n  HostName 127.0.0.1\n  Port 2222\n  User portable-ci\n')
+  const hosts = await current.page.evaluate(() => window.hermesDesktop.sshConfigHosts())
+  assert.deepEqual(hosts.hosts, ['portable-ci-host'])
+  const resolved = await current.page.evaluate(() => window.hermesDesktop.sshResolveHost('portable-ci-host'))
+  assert.equal(resolved.hostname, '127.0.0.1')
+  assert.equal(resolved.port, 2222)
+  assert.equal(resolved.user, 'portable-ci')
+  mark('bundled SSH resolves private config through actual Desktop IPC under reduced PATH')
+
   mark('actual Electron paths, hostile environment precedence, child process, reduced PATH, Unicode path and unrelated cwd')
   assert.equal((await current.page.evaluate(() => window.hermesDesktop.getSecretStorageEncryption())).on, true)
   const refusal = await current.page.evaluate(async () => {

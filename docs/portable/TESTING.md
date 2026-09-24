@@ -11,8 +11,8 @@
 | 后续类型检查和 lint | 已通过，commit `ac69428123819b3f2ac0528dbc3f7e9250910f9f`，run [35983373767](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35983373767) |
 | 完整 Electron 平台套件放在 Windows | 失败：2322 passed / 43 failed / 25 skipped。失败含 getuid、POSIX chmod、ControlMaster、路径格式、Windows临时目录与进程时序；不能把这些测试说成通过 |
 | Portable 新增路径/搬迁单元测试 | 上述 run 中通过；仅为单元证据 |
-| 完整平台套件迁至普通 Linux runner | 待运行；保留完整套件，不删除失败用例 |
-| 最终 ZIP 的真实 exe smoke | 待运行，以 smoke-report.json 为准 |
+| 完整平台套件迁至普通 Linux runner | 已通过：commit `5e159e0765acc4504e609ac7449be0a0910b429f`，run [35985127566](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35985127566)，2388 passed / 2 skipped；GUI 保持 Chromium sandbox |
+| 最终 ZIP 的真实 exe smoke | 上述 run 构建/打包成功；smoke 在中文路径子进程环境断言失败（测试按 UTF-8 解码 cmd 输出）；下一提交修正为 cmd /u + UTF-16LE 并重新验证 |
 | 独立 Windows job 凭据失效/重新认证 | 待运行，以 cross-machine-report.json 为准 |
 
 ## 可执行测试
@@ -26,7 +26,7 @@ Windows 回归选择 Portable、Windows 专属、bootstrap、backend env、nativ
 ## 尚未完成的关键验收
 
 - 全新本地 Agent 自动 bootstrap、真实 backend 可用、搬迁后完整 venv 重建及联网/离线边界。
-- SSH 私有配置、known_hosts、变更主机密钥拒绝的完整原生联调；普通 Windows 的 OpenSSH 依赖供应。
+- SSH 私有配置、known_hosts、变更主机密钥拒绝的完整原生联调；随包 OpenSSH 在普通 Windows 下的完整认证与主机密钥回归。
 - 同一机器的另一个 Windows 用户；跨机器 browser cookie 恢复（不能从 DPAPI token 测试推断）。
 - 实际远程 gateway mock 的连接成功、认证失败、断线重连、聊天、工具状态、图片显示。
 - 更换盘符、多个 Portable 副本并发、用户环境 registry 前后快照、本地 bootstrap 全过程泄漏检查。
