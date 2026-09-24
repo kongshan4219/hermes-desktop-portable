@@ -139,6 +139,14 @@ try {
     try { await window.hermesDesktop.setSecretStorageEncryption(false); return '' } catch (e) { return String(e) }
   })
   assert.match(refusal, /Portable requires/)
+  const configBeforeTest = snapshot(path.join(root, 'data', 'desktop'))['connection.json']
+  received.length = 0
+  await current.page.evaluate(async ({ remoteUrl, token }) => {
+    try { await window.hermesDesktop.testConnectionConfig({ mode: 'remote', remoteAuthMode: 'token', remoteUrl, remoteToken: token }) } catch { /* HTTP mock refuses WS */ }
+  }, { remoteUrl, token })
+  assert.ok(received.includes(token), 'A newly entered token must reach the gateway before it is saved')
+  assert.equal(snapshot(path.join(root, 'data', 'desktop'))['connection.json'], configBeforeTest)
+  mark('new in-memory credential can be tested without persisting the connection')
   const saved = await current.page.evaluate(async ({ remoteUrl, token }) => window.hermesDesktop.saveConnectionConfig({
     mode: 'remote', remoteAuthMode: 'token', remoteToken: token, remoteUrl
   }), { remoteUrl, token })
@@ -163,10 +171,9 @@ try {
   })
   const update = await current.page.evaluate(() => window.hermesDesktop.updates.check())
   assert.equal(update.reason, 'portable-manual-update')
-  const applyError = await current.page.evaluate(async () => {
-    try { await window.hermesDesktop.updates.apply(); return '' } catch (e) { return String(e) }
-  })
-  assert.match(applyError, /Portable program updates/)
+  const applyResult = await current.page.evaluate(() => window.hermesDesktop.updates.apply())
+  assert.equal(applyResult.ok, false)
+  assert.match(applyResult.message, /Portable program updates/)
   mark('real credential save, forced encryption and overwrite updater refusal')
   await current.page.screenshot({ path: path.join(out, 'portable-window.png') })
 

@@ -14,6 +14,7 @@
 | 完整平台套件迁至普通 Linux runner | 已通过：commit `5e159e0765acc4504e609ac7449be0a0910b429f`，run [35985127566](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35985127566)，2388 passed / 2 skipped；GUI 保持 Chromium sandbox |
 | 最终 ZIP 的真实 exe smoke | 上述 run 构建/打包成功；smoke 在中文路径子进程环境断言失败（测试按 UTF-8 解码 cmd 输出）；下一提交修正为 cmd /u + UTF-16LE 并重新验证 |
 | 随包 Git/OpenSSH 首轮 | commit `7901ea456390fbe3b772ea63bcba34991ff1ad0a`，run [35986064975](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35986064975) 构建成功；测试在 PowerShell Expand-Archive 超时，未到达应用启动。改用系统 ZIP API 后重跑 |
+| 实际 exe 路径与 SSH config | commit `a840966519cf3b4e5a1f8d66b9cd4a09c8c87d25`，run [35986781900](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35986781900)：私有路径、子进程、中文路径、不同 cwd、缩减 PATH、随包 SSH 配置解析已通过。smoke 随后因测试误把 updater 的结构化拒绝当成 throw 而失败，正在修正断言 |
 | 独立 Windows job 凭据失效/重新认证 | 待运行，以 cross-machine-report.json 为准 |
 
 ## 可执行测试

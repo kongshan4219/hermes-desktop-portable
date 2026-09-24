@@ -95,7 +95,7 @@ export async function verifyRemote({ zip, scratch, backend, out, setImageUrl, re
         return ''
       } catch (e) { return String(e) }
     }, remoteUrl)
-    assert.match(error, /unauthor|token|401|403|reject|WebSocket/i)
+    assert.match(error, /unauthor|401|403|reject|WebSocket/i)
     mark('remote client rejects an invalid synthetic credential')
     await send('Portable remote chat verification', reply)
     mark('remote chat uses real gateway and mock model response')

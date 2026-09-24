@@ -9720,7 +9720,11 @@ async function saveRegistryConnection(input: any = {}) {
   // Token-auth remotes must actually have a token to be dialable. OAuth and
   // cloud entries authenticate via cookies/native tokens instead.
   if (entry.kind === 'remote' && entry.authMode !== 'oauth' && !decryptDesktopSecret(entry.token)) {
-    throw new Error('Remote gateway session token is required.')
+    throw new Error(
+      portablePaths()
+        ? 'Portable gateway credentials are unavailable. Sign in again or enter a new session token in Settings → Gateway. Saved connection settings are preserved.'
+        : 'Remote gateway session token is required.'
+    )
   }
 
   if (existing && connectionDialFieldsChanged(existing, entry)) {
@@ -9934,7 +9938,11 @@ async function sanitizeDesktopConnectionConfig(config = readDesktopConnectionCon
 // block when empty so plain remote connections stay unchanged.
 function buildRemoteBlock(remoteUrl, authMode, token, org?: string, headers?: object, name?: string) {
   if (authMode !== 'oauth' && !decryptDesktopSecret(token)) {
-    throw new Error('Remote gateway session token is required.')
+    throw new Error(
+      portablePaths()
+        ? 'Portable gateway credentials are unavailable. Sign in again or enter a new session token in Settings → Gateway. Saved connection settings are preserved.'
+        : 'Remote gateway session token is required.'
+    )
   }
 
   const block: { url: string; authMode: string; token: object; headers?: object; org?: string; name?: string } = {
@@ -10017,7 +10025,9 @@ function coerceDesktopConnectionConfig(input: any = {}, existing = readDesktopCo
   // plain-text storage, and that strictness is asserted in exactly one place.
   const nextToken = resolvePersistedRemoteToken({
     incomingToken,
-    persistToken,
+    // Portable also encrypts an in-memory connection-test envelope. This does
+    // not write configuration; it avoids admitting plaintext saved envelopes.
+    persistToken: persistToken || Boolean(portablePaths()),
     existingToken: existingBlock.token,
     allowPlainText: input.allowPlainTextToken,
     encryptSecret: encryptDesktopSecret
@@ -10155,6 +10165,10 @@ async function buildRemoteConnection(
   }
 
   if (!token) {
+    if (portablePaths()) {
+      throw new Error('Portable gateway credentials are unavailable. Sign in again or enter a new session token in Settings → Gateway. Saved connection settings are preserved.')
+    }
+
     throw new Error(
       'Remote Hermes gateway is selected, but no session token is saved. ' +
         'Open Settings → Gateway and save a token, or switch back to Local.'
