@@ -18527,6 +18527,10 @@ async function getUninstallSummary() {
 }
 
 async function runDesktopUninstall(mode) {
+  if (portablePaths()) {
+    return { ok: false, error: 'portable-manual-removal', message: 'Close Hermes and remove the Portable folder. Back up data first if you want to retain it.' }
+  }
+
   let uninstallArgs
 
   try {

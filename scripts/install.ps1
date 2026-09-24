@@ -975,7 +975,9 @@ function Sync-EnvPath {
         $env:Path = "$HermesHome\node;$HermesHome\bin;$HermesHome\git\cmd;$HermesHome\git\bin;$env:Path"
         return
     }
+    if (-not $Portable) {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+    }
 }
 
 # npm lifecycle scripts on Windows spawn ``cmd.exe /d /s /c node <script>``.
@@ -1271,7 +1273,9 @@ function Resolve-UvCmd {
 
     # Refresh PATH from registry in case the current process started before
     # Install-Uv updated User PATH.
+    if (-not $Portable) {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+    }
     if (Get-Command uv -ErrorAction SilentlyContinue) {
         $script:UvCmd = "uv"
         return
@@ -2028,7 +2032,9 @@ function Test-Node {
             winget @wingetArgs 2>&1 | Out-Null
             $ErrorActionPreference = $prevEAP
             # Refresh PATH
-            $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+            if (-not $Portable) {
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+    }
             if (Test-SystemNodeReady) {
                 $script:HasNode = $true
                 return $true
