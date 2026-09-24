@@ -46,3 +46,7 @@ Windows 回归选择 Portable、Windows 专属、bootstrap、backend env、nativ
 - 正式 schedule、同步候选 SHA CI、冲突 Issue 和草稿发布链路，等待默认分支合入及权限配置。
 
 未使用真实 Codex/搜索/生图账号，真实服务器 E2E 未执行。未验证項不能改写成通过。发布门禁保持关闭，直到必要证据补齐。
+
+## ac217cca 的补充结果
+
+[run 35994510437](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35994510437) 的 Desktop ZIP smoke、平台套件和跨机器凭据继续通过；本地安装停在 Cua runtime contract。TUI native exit code 修复已验证，Browser npm 仍有超时。当前把 PS 5.1 原生 Cua 检查前移到完整打包前，保留实际 version/manifest 输出；关键断言及发布门禁未放松。

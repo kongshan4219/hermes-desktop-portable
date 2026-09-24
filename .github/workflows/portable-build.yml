@@ -53,6 +53,9 @@ jobs:
             run_url = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
             acceptance = 'portable-candidate-not-release-approved'
           } | ConvertTo-Json | Set-Content build-evidence/environment.json
+      - name: Native private Cua prerequisite contract
+        shell: powershell
+        run: ./scripts/portable/cua-preflight.ps1
       - name: Install from root lockfile
         run: npm ci
       - name: Typecheck Desktop

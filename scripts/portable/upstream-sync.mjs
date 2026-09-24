@@ -49,8 +49,16 @@ if (existing.some(pr => pr.state === 'closed')) {
   process.exit(0)
 }
 if (open) {
-  fs.appendFileSync(process.env.GITHUB_OUTPUT, `source_sha=${open.head.sha}\npr_number=${open.number}\n`)
-  fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Revalidating existing candidate ${open.head.sha}: ${open.html_url}\n`)
+  // A failed candidate needs a fix or an explicit manual retry, not an
+  // unbounded daily rebuild of the same source. Human PR updates already
+  // trigger portable-ci; workflow_dispatch is the recovery path for a run
+  // interrupted after PR creation but before validation.
+  if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `source_sha=${open.head.sha}\npr_number=${open.number}\n`)
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Manual revalidation of ${open.head.sha}: ${open.html_url}\n`)
+  } else {
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Existing candidate ${open.head.sha}: ${open.html_url}. No scheduled retry; inspect its checks, fix the PR or run this workflow manually.\n`)
+  }
   process.exit(0)
 }
 // Recover an interrupted push-before-PR without generating a new commit or

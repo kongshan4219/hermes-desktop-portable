@@ -3958,6 +3958,8 @@ function Install-BrowserUseCli {
 function Test-CuaDriverRuntimeContract {
     param([Parameter(Mandatory = $true)][string]$DriverPath)
 
+    $previousCuaEAP = $ErrorActionPreference
+    if ($Portable) { $ErrorActionPreference = "Continue" }
     try {
         $versionOutput = (& $DriverPath --version 2>$null | Out-String).Trim()
         if ($LASTEXITCODE -ne 0) {
@@ -4002,7 +4004,10 @@ function Test-CuaDriverRuntimeContract {
         }
         return $true
     } catch {
+        if ($Portable) { Write-Warn "Private Cua probe error: $($_.Exception.Message)" }
         return $false
+    } finally {
+        $ErrorActionPreference = $previousCuaEAP
     }
 }
 
@@ -4031,7 +4036,7 @@ function Install-CuaDriver {
         $stage = Join-Path $env:TEMP ("portable-cua-" + [Guid]::NewGuid().ToString("N"))
         try {
             $url = "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.28.2/cua-driver-rs-0.28.2-windows-x86_64.zip"
-            Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing
+            Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing -TimeoutSec 120
             $expected = "3c1fcf10ff9513b94e4af78ad6a216ab62aa95b2c9a3b70dfbdba9f04e021533"
             if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
                 throw "Private Cua archive SHA256 mismatch"
