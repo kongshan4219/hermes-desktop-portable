@@ -101,9 +101,58 @@ async function stop(pair) {
   })
   await pair.app.close()
 }
+async function checkUserFolders(pair, root) {
+  const paths = await pair.app.evaluate(({ app }) => Object.fromEntries(
+    ['desktop', 'downloads', 'documents', 'pictures', 'music', 'videos'].map(name => [name, app.getPath(name)])
+  ))
+  for (const [name, dir] of Object.entries(paths)) {
+    assert.equal(dir, path.join(root, 'data', 'home', name[0].toUpperCase() + name.slice(1)))
+    assert.ok(fs.statSync(dir).isDirectory(), `Missing native file-dialog directory: ${dir}`)
+  }
+}
+async function checkImageSave(pair, root) {
+  await checkUserFolders(pair, root)
+  const windowHandle = await pair.app.browserWindow(pair.page)
+  const windowId = await windowHandle.evaluate(window => window.id)
+  await windowHandle.dispose()
+  const result = await pair.app.evaluate(async ({ BrowserWindow, dialog }, { url, windowId }) => {
+    const original = dialog.showSaveDialog
+    let canceled = true
+    let destination
+    // Automate only the chooser. Exercise the shipped preload, IPC, image
+    // fetch and disk write; this does not claim native-dialog UI automation.
+    dialog.showSaveDialog = async (_window, options) => {
+      destination = options.defaultPath
+      return { canceled, filePath: canceled ? undefined : destination }
+    }
+    try {
+      const window = BrowserWindow.fromId(windowId)
+      const invoke = () => window.webContents.executeJavaScript(`window.hermesDesktop.saveImageFromUrl(${JSON.stringify(url)})`)
+      const cancelResult = await invoke()
+      const wroteOnCancel = process.getBuiltinModule('fs').existsSync(destination)
+      canceled = false
+      const saveResult = await invoke()
+      return { destination, cancelResult, wroteOnCancel, saveResult }
+    } finally {
+      dialog.showSaveDialog = original
+    }
+  }, { url: `${remoteUrl}/portable-download-${crypto.randomBytes(4).toString('hex')}.png`, windowId })
+  assert.equal(path.dirname(result.destination), path.join(root, 'data', 'home', 'Downloads'))
+  assert.equal(result.cancelResult, false)
+  assert.equal(result.wroteOnCancel, false)
+  assert.equal(result.saveResult, true)
+  assert.deepEqual(fs.readFileSync(result.destination), png)
+  return path.basename(result.destination)
+}
 const token = 'portable-ci-synthetic-Zq7Z4hV9nX2pL8sK3tB6wR1yM5jD0fG'
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64')
 const received = []
 const server = http.createServer((req, res) => {
+  if (req.url.startsWith('/portable-download-')) {
+    res.writeHead(200, { 'Content-Type': 'image/png' })
+    res.end(png)
+    return
+  }
   if (req.headers['x-hermes-session-token']) received.push(req.headers['x-hermes-session-token'])
   res.writeHead(200, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify({ ok: true, auth_required: false, version: '0.0.0-portable-mock' }))
@@ -116,6 +165,8 @@ try {
   const root = extract('中文 日本 (first)')
   assert.equal(fs.existsSync(path.join(root, 'data')), false)
   current = await launch(root)
+  const downloadedImage = await checkImageSave(current, root)
+  mark('private native-dialog folders exist; real image save IPC writes PNG bytes and cancellation writes nothing')
   const info = await inspect(current.app)
   for (const value of [...Object.values(info.paths), info.storage, info.hermes, info.partition]) {
     assert.ok(value.toLowerCase().startsWith(path.join(root, 'data').toLowerCase() + path.sep), value)
@@ -207,6 +258,9 @@ try {
   fs.rmSync(root, { recursive: true, force: true })
   const moved = fs.realpathSync(target)
   current = await launch(moved)
+  assert.deepEqual(fs.readFileSync(path.join(moved, 'data', 'home', 'Downloads', downloadedImage)), png)
+  await checkImageSave(current, moved)
+  mark('image downloads survive cross-drive movement and new saves use the moved Downloads directory')
   assert.equal(await current.page.evaluate(() => localStorage.getItem('portable-ci-sentinel')), 'preserved')
   assert.equal(await current.app.evaluate(async ({ session }) => (await session.defaultSession.cookies.get({ url: 'https://portable.invalid' }))[0]?.value), 'preserved')
   assert.equal(await current.page.evaluate(() => new Promise((resolve, reject) => {
@@ -238,7 +292,13 @@ try {
   fs.writeFileSync(path.join(data, 'upgrade-sentinel.txt'), 'retain me')
   const upgrade = extract('upgrade')
   fs.cpSync(data, path.join(upgrade, 'data'), { recursive: true })
+  // Reproduce the old Portable layout: redirected HOME without shell folders.
+  fs.rmSync(path.join(upgrade, 'data', 'home', 'Desktop'), { recursive: true })
+  fs.rmSync(path.join(upgrade, 'data', 'home', 'Documents'), { recursive: true })
   current = await launch(upgrade)
+  await checkImageSave(current, upgrade)
+  assert.deepEqual(fs.readFileSync(path.join(upgrade, 'data', 'home', 'Downloads', downloadedImage)), png)
+  mark('startup repairs missing shell folders without replacing existing downloads')
   assert.equal(fs.readFileSync(path.join(upgrade, 'data', 'upgrade-sentinel.txt'), 'utf8'), 'retain me')
   assert.equal(await current.page.evaluate(() => localStorage.getItem('portable-ci-sentinel')), 'preserved')
   await stop(current); current = null

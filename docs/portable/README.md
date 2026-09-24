@@ -11,6 +11,7 @@
 | `data/desktop` | Desktop JSON 配置、窗口状态、Chromium cookies/localStorage/IndexedDB、持久 session partitions |
 | `data/hermes` | 本地 Agent 配置、会话、日志、checkout、Python/venv、Git/Node/uv 等受管运行时 |
 | `data/home` | 应用及子进程的私有 HOME、AppData、Codex 配置、`.ssh/config` 和 known_hosts |
+| `data/home/Downloads` | 图片下载的默认保存位置；可在保存对话框中另选目录 |
 | `data/cache` | Chromium、uv/pip/npm、浏览器和模型缓存、临时文件、迁移前 venv 备份 |
 | `data/logs`、`data/crash` | Electron 日志与 crash dumps；部分上游日志保留在 `data/hermes/logs` |
 | `data/portable-diagnostics.json` | 启用状态、exe 与数据实际路径、Desktop 版本，不包含令牌 |
@@ -19,6 +20,10 @@
 Portable 优先于外部 `HERMES_HOME`、Desktop profile、Python/Codex/缓存环境变量；不会自动导入本机 Hermes、Codex 或 SSH 凭据。初始化只改变当前应用及其子进程的环境，不修改 Windows 用户/系统环境。不可写或被链接重定向的受管顶层目录会报错停止，没有 AppData 回退。
 
 用户明确选择的外部文件、项目目录、SSH 私钥仍由用户管理；其绝对路径不保证随便携目录迁移。服务器上的数据仍留在服务器。
+
+启动时会创建私有 `Desktop`、`Downloads`、`Documents`、`Pictures`、`Music`、`Videos` 目录，并设置对应的 Electron 路径；已有文件保留，缺失目录在下次启动时补齐。它们位于 `data/home`，不会重定向 Windows 系统账户的文件夹。
+
+旧候选版本下载图片时，可能弹出“位置不可用：…\\data\\home\\Desktop”。这是便携版遗漏默认文件夹导致的保存位置错误。临时可在该便携目录的 `data/home` 下创建 `Desktop` 和 `Downloads` 文件夹，再重启应用并重新下载。无需删除聊天记录或重新生成图片。修复后的候选会自动创建这些目录；实际验证状态以对应提交的 CI 报告为准。
 
 ## 依赖边界
 

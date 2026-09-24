@@ -129,6 +129,24 @@ export function initializePortable(app: App): PortablePaths | null {
     writableDirectory(dir)
   }
 
+  // Native file dialogs can resolve these under the redirected USERPROFILE.
+  // Create them before redirecting it, and override Electron's cached paths too.
+  const userFolders = {
+    desktop: 'Desktop',
+    documents: 'Documents',
+    downloads: 'Downloads',
+    pictures: 'Pictures',
+    music: 'Music',
+    videos: 'Videos'
+  } as const
+
+  for (const name of Object.keys(userFolders) as (keyof typeof userFolders)[]) {
+    const dir = path.join(p.home, userFolders[name])
+
+    writableDirectory(dir)
+    app.setPath(name, dir)
+  }
+
   // Preserve OS process plumbing, not the launching shell's credentials,
   // Python environment, Git configuration, or another Hermes installation.
   // This changes only this process and its children; never Windows settings.
