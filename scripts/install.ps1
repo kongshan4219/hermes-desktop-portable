@@ -2538,6 +2538,13 @@ function Install-Repository {
         $env:GIT_CONFIG_KEY_0 = "windows.appendAtomically"
         $env:GIT_CONFIG_VALUE_0 = "false"
         git config --global windows.appendAtomically false 2>$null
+        if ($Portable) {
+            # GIT_CONFIG_GLOBAL points inside this Portable's data/home. The
+            # official repository contains paths beyond MAX_PATH when the ZIP
+            # lives in a nested folder; do not change the Windows registry.
+            git config --global core.longpaths true
+            if ($LASTEXITCODE -ne 0) { throw "Could not enable long paths in Portable Git configuration" }
+        }
 
         # Try SSH first, then HTTPS, with -c flag for atomic write fix
         Write-Info "Trying SSH clone..."
@@ -2596,7 +2603,15 @@ function Install-Repository {
                     # (#50823 / #61657). Fetch the requested ref and force-check
                     # it out (-f) so untracked ZIP files cannot block checkout.
                     Push-Location $InstallDir
-                    git -c windows.appendAtomically=false init 2>$null
+                    if ($Portable) {
+                        # Git's successful init can print default-branch hints
+                        # to stderr. PS 5.1 must judge the native exit status,
+                        # not turn informational stderr into a failed fallback.
+                        Invoke-NativeWithRelaxedErrorAction { git -c windows.appendAtomically=false init }
+                        if ($LASTEXITCODE -ne 0) { throw "Portable ZIP fallback git init failed (exit $LASTEXITCODE)" }
+                    } else {
+                        git -c windows.appendAtomically=false init 2>$null
+                    }
                     git -c windows.appendAtomically=false config windows.appendAtomically false 2>$null
                     # Pin autocrlf=false BEFORE the checkout below. Git for Windows
                     # defaults to core.autocrlf=true, which would renormalize the
@@ -5223,4 +5238,3 @@ try {
     Write-Host "  .\install.ps1" -ForegroundColor Yellow
     Write-Host ""
 }
-

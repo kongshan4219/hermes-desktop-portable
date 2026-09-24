@@ -26,13 +26,13 @@ ZIP 包含官方 Electron、渲染器及原生 Desktop 模块，不包含预装 
 
 首次使用本地模式会下载受管 Git、Python、Node、uv 及依赖。安装器随 ZIP 固定，checkout 固定到构建的 fork SHA，避免用 fork SHA 向官方仓库下载不存在的脚本。可选 ripgrep/ffmpeg 不通过 winget/choco/scoop 装入系统；独立便携依赖供应及相关能力仍待完成。便携、离线、全部依赖随包是三项不同目标。
 
-移动整个目录后，旧 Python venv 会保留在 `data/cache/runtime-before-move-*`，完成标记会失效，启动本地模式需要重新构建 venv。配置、会话和 checkout 不因此删除；重建可能需要联网。完整本地重建尚需云端验证，不能从 Desktop 能打开推断本地 Agent 已可迁移。
+移动整个目录后，旧 Python venv 会保留在 `data/cache/runtime-before-move-*`，完成标记会失效，启动本地模式需要重新构建 venv。配置、会话和 checkout 不因此删除；重建可能需要联网。Desktop 的同机跨盘移动已通过；完整本地重建仍待验证。上一轮真实 bootstrap 暴露了 PR 构建引用错误，已修复并重新验证中，不能从 Desktop 能打开推断本地 Agent 已可迁移。
 
 ## 凭据与迁移
 
 Portable 强制以 Electron safeStorage/Windows DPAPI 保存 Desktop gateway/OAuth 令牌，不接受明文降级。换用户/机器后可能无法解密，连接配置保留，需重新认证。浏览器 cookie 也受 Windows 加密限制。不要假设复制目录就保留登录。
 
-本地 Agent 的原有凭据格式保持不变，例如 `.env` 可能包含明文 API key；Portable 只改变归档位置，不声称把整个 data 加密。应保护 data 及备份。跨机器、跨用户的实测范围见 [TESTING.md](TESTING.md)。
+本地 Agent 的原有凭据格式保持不变，例如 `.env` 可能包含明文 API key；Portable 只改变归档位置，不声称把整个 data 加密。应保护 data 及备份。独立 Windows 机器已实测旧令牌不可解密、配置保留和安全重新认证；同机另一 Windows 用户及跨机器 cookie 未验证，详见 [TESTING.md](TESTING.md)。
 
 ## 升级与回退
 

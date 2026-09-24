@@ -117,6 +117,26 @@ export async function verifyRemote({ zip, scratch, backend, out, setImageUrl, re
     mark('remote client rejects an invalid synthetic credential')
     await send('Portable remote chat verification', reply)
     mark('remote chat uses real gateway and mock model response')
+    // The upstream fixture echoes the ACTUAL tool result back. Run this before
+    // the interim script, while the session has no previous tool result.
+    const composer = page.locator('textarea:visible, [contenteditable="true"]:visible').first()
+    await composer.fill('E2E_CALL(terminal)[{"command":"printf portable-ci-tool-ok"}]')
+    await composer.press('Enter')
+    const toolReply = page.locator('[data-slot="aui_assistant-message-root"]').filter({ hasText: 'E2E_CALL_RESULT:' }).last()
+    const toolDeadline = Date.now() + 120000
+    while (!(await toolReply.isVisible()) && Date.now() < toolDeadline) {
+      // Exercise the normal approval UI if this harmless fixture command is
+      // gated. Never disable the application's approval policy.
+      const run = page.getByRole('button', { name: /^run(?: once| command)?$/i }).first()
+      if (await run.isVisible()) await run.click()
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    await toolReply.waitFor({ timeout: 1000 })
+    await toolReply.filter({ hasText: /"exit_code"\s*:\s*0/ }).waitFor({ timeout: 30000 })
+    assert.match(await toolReply.innerText(), /portable-ci-tool-ok/)
+    assert.match(await toolReply.innerText(), /"exit_code"\s*:\s*0/)
+    await page.locator('[data-tool-summary], [data-slot="tool-block"]').first().waitFor()
+    mark('remote terminal tool completes successfully and its status/result render through the real UI')
     await send('E2E_INTERIM_TRIGGER Portable tool verification', 'All done! Here is the complete summary of what I found.')
     await page.getByText('Let me start by planning the approach.', { exact: false }).first().waitFor()
     mark('upstream scripted tool execution and interim/final results render remotely')
