@@ -349,8 +349,8 @@ import {
 } from './pool-spawn-coordinator'
 import { createPoolStopper } from './pool-stop'
 import { poolTouchKeys } from './pool-touch-scope'
-import { createPortalSession } from './portal-session'
 import { portablePaths, portableSshOptions } from './portable'
+import { createPortalSession } from './portal-session'
 import { createKeepAwake } from './power-save'
 import { readPreUpdateBackupEnabled } from './pre-update-backup-config'
 import { capturePreviewContents } from './preview-capture'
@@ -677,7 +677,7 @@ if (IS_WINDOWS) {
   // skip it (the installer already granted the ACE at install time). Repair
   // targets the install dir only: granting AppContainer read on userData would
   // expose Hermes sessions/config to every packaged app on the machine.
-  if (shouldAttemptAclRepair(priorMarker)) {
+  if (!portablePaths() && shouldAttemptAclRepair(priorMarker)) {
     const exeDir = path.dirname(process.execPath)
     const acl = grantAllApplicationPackagesAcl(exeDir, { execFileSync })
 
@@ -694,6 +694,12 @@ if (IS_WINDOWS) {
     marker: priorMarker,
     appVersion: app.getVersion()
   })
+
+  if (portablePaths() && sandboxDecision.enable) {
+    dialog.showErrorBox('Hermes Portable', 'Chromium sandbox initialization failed. Portable will not disable the sandbox. Move the folder to a supported local Windows filesystem and retry.')
+    app.exit(1)
+    throw new Error('Portable refuses an unsandboxed fallback')
+  }
 
   windowsSandboxFallbackActive = sandboxDecision.enable
   windowsSandboxFallbackSticky = sandboxDecision.nextMarker.state === 'fallback'
@@ -716,6 +722,7 @@ if (IS_WINDOWS) {
   // "GPU process isn't usable" FATAL abort ends the process with no recovery.
   app.on('child-process-gone', (_event, details) => {
     if (
+      portablePaths() ||
       !shouldRelaunchForGpuSandboxCrash({
         details,
         alreadyNoSandbox: windowsSandboxFallbackActive || alreadyHasNoSandbox(process.argv, process.env),
@@ -15396,6 +15403,7 @@ function createWindow() {
         // dead window. Gated on the exit code so unrelated crash loops don't
         // silently drop the sandbox.
         if (
+          portablePaths() ||
           !shouldRelaunchForRendererSandboxCrashLoop({
             reason: details?.reason,
             exitCode: details?.exitCode,

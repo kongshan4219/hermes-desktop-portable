@@ -80,6 +80,8 @@ async function inspect(app) {
       paths: Object.fromEntries(['home', 'userData', 'sessionData', 'temp', 'logs', 'crashDumps'].map(k => [k, app.getPath(k)])),
       storage: session.defaultSession.getStoragePath(),
       available: safeStorage.isEncryptionAvailable(),
+      sandboxDisabled: app.commandLine.hasSwitch('no-sandbox'),
+      partition: session.fromPartition('persist:portable-ci').getStoragePath(),
       childHomeCorrect: child.includes(`HERMES_HOME=${process.env.HERMES_HOME}`),
       inheritedCredential: child.includes('portable-test-must-not-inherit'),
       hermes: process.env.HERMES_HOME,
@@ -111,10 +113,11 @@ try {
   assert.equal(fs.existsSync(path.join(root, 'data')), false)
   current = await launch(root)
   const info = await inspect(current.app)
-  for (const value of [...Object.values(info.paths), info.storage, info.hermes]) {
+  for (const value of [...Object.values(info.paths), info.storage, info.hermes, info.partition]) {
     assert.ok(value.toLowerCase().startsWith(path.join(root, 'data').toLowerCase() + path.sep), value)
   }
   assert.ok(info.available)
+  assert.equal(info.sandboxDisabled, false)
   assert.ok(info.childHomeCorrect)
   assert.equal(info.inheritedCredential, false)
   assert.equal(fs.existsSync(path.join(scratch, 'forbidden-hermes')), false)
@@ -130,6 +133,8 @@ try {
     mode: 'remote', remoteAuthMode: 'token', remoteToken: token, remoteUrl
   }), { remoteUrl, token })
   assert.equal(saved.remoteTokenSet, true)
+  fs.mkdirSync(path.join(out, 'cross-machine'), { recursive: true })
+  fs.copyFileSync(path.join(root, 'data', 'desktop', 'connection.json'), path.join(out, 'cross-machine', 'connection.json'))
   await current.page.evaluate(() => localStorage.setItem('portable-ci-sentinel', 'preserved'))
   await current.app.evaluate(async ({ session }) => {
     await session.defaultSession.cookies.set({ url: 'https://portable.invalid', name: 'portable', value: 'preserved', expirationDate: Date.now() / 1000 + 86400 })

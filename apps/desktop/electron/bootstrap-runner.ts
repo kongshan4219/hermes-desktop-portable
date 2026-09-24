@@ -335,6 +335,7 @@ async function resolveInstallScript({
     const bundled = path.join(process.resourcesPath, 'portable', 'install.ps1')
 
     await fsp.access(bundled, fs.constants.R_OK)
+
     return { path: bundled, source: 'portable-bundle', kind: installScriptKind() }
   }
 
