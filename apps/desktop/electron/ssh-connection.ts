@@ -36,6 +36,8 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 
+import { portableSshOptions } from './portable'
+
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000
 const DEFAULT_EXEC_TIMEOUT_MS = 20_000
 const DEFAULT_FORWARD_TIMEOUT_MS = 15_000
@@ -226,6 +228,7 @@ function baseSshOptions(controlPath, connectTimeoutMs?) {
     : []
 
   return [
+    ...portableSshOptions(),
     ...mux,
     '-o',
     'BatchMode=yes',
@@ -1189,3 +1192,4 @@ export {
   validateSshTarget,
   withRemoteTimeout
 }
+

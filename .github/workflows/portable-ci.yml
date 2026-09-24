@@ -1,5 +1,5 @@
 name: Portable CI
-run-name: Windows bootstrap - ${{ github.event.pull_request.head.sha || github.sha }}
+run-name: Portable candidate - ${{ github.event.pull_request.head.sha || github.sha }}
 
 on:
   push:
@@ -25,9 +25,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  windows-bootstrap:
+  windows:
     if: github.repository == 'kongshan4219/hermes-desktop-portable'
-    name: Official unpacked build (not Portable acceptance)
+    name: Windows candidate build and packaged tests
     runs-on: windows-2022
     timeout-minutes: 45
     defaults:
@@ -67,34 +67,43 @@ jobs:
             node = (node --version)
             npm = (npm --version)
             run_url = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
-            acceptance = 'upstream-build-only; portable-not-implemented'
+            acceptance = 'portable-candidate-not-release-approved'
           } | ConvertTo-Json | Set-Content build-evidence/environment.json
       - name: Install from root lockfile
         run: npm ci
+      - name: Typecheck Desktop
+        run: npm run typecheck --workspace apps/desktop
+      - name: Lint Portable integration
+        working-directory: apps/desktop
+        run: npx eslint electron/portable.ts electron/portable.test.ts electron/entry.ts electron/bootstrap-runner.ts electron/ssh-connection.ts electron/main.ts
+      - name: Desktop platform tests
+        working-directory: apps/desktop
+        run: npx vitest run --project electron
       - name: Build official unpacked Windows app
+        env:
+          GITHUB_REF_NAME: main
         run: npm run pack --workspace apps/desktop
-      - name: Check expected output
-        run: |
-          if (!(Test-Path 'apps/desktop/release/win-unpacked/Hermes.exe')) {
-            throw 'Official Windows executable was not produced'
-          }
-          Get-FileHash 'apps/desktop/release/win-unpacked/Hermes.exe' -Algorithm SHA256 |
-            Select-Object Algorithm, Hash |
-            ConvertTo-Json | Set-Content build-evidence/executable-hash.json
-          @(
-            'Bootstrap checks the official Windows build chain only.'
-            'The executable has not passed Portable tests and is not a Portable release.'
-          ) | Set-Content build-evidence/ACCEPTANCE.txt
+      - name: Create clean Portable ZIP
+        run: ./scripts/portable/package.ps1
+      - name: Exercise executable from final ZIP
+        run: node scripts/portable/smoke.mjs portable-out
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: bootstrap-evidence-${{ github.run_id }}
-          path: build-evidence/
+          name: portable-evidence-${{ github.run_id }}
+          path: |
+            build-evidence/
+            portable-out/*.json
+            portable-out/*.png
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
-          name: upstream-windows-unpacked-${{ github.run_id }}
-          path: apps/desktop/release/win-unpacked/
-          if-no-files-found: error
+          name: portable-candidate-${{ github.run_id }}
+          path: |
+            portable-out/*.zip
+            portable-out/SHA256SUMS.txt
+            portable-out/portable-build.json
+          if-no-files-found: warn
           retention-days: 7
