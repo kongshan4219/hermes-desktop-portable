@@ -24,9 +24,9 @@ Portable 优先于外部 `HERMES_HOME`、Desktop profile、Python/Codex/缓存�
 
 ZIP 包含官方 Electron、渲染器及原生 Desktop 模块，不包含预装 Python Agent、模型或个人数据。直接 URL 远程模式不需要开发工具链。SSH/Git/Bash 随包提供未修改的官方 PortableGit 2.55.0.5，下载 URL 与 SHA256 固定并记录在 metadata，不依赖系统安装的开发工具。该新增供应方式仍须匹配本次 CI 验收。不会关闭 TLS 或 SSH 主机密钥校验。
 
-首次使用本地模式会下载受管 Git、Python、Node、uv 及依赖。安装器随 ZIP 固定，checkout 固定到构建的 fork SHA，避免用 fork SHA 向官方仓库下载不存在的脚本。可选 ripgrep/ffmpeg 不通过 winget/choco/scoop 装入系统；独立便携依赖供应及相关能力仍待完成。便携、离线、全部依赖随包是三项不同目标。
+首次使用本地模式会下载受管 Python、Node、uv、Browser Use、Cua 及依赖；Git 已随 ZIP 提供。Cua 0.28.2 使用固定 SHA256 的官方 ZIP 私有解压，不运行其全局安装脚本，不注册开机任务或修改用户 PATH。安装器随 ZIP 固定，checkout 固定到构建的 fork SHA，避免用 fork SHA 向官方仓库下载不存在的脚本。可选 ripgrep/ffmpeg 不通过 winget/choco/scoop 装入系统；独立便携依赖供应及相关能力仍待完成。便携、离线、全部依赖随包是三项不同目标。
 
-移动整个目录后，旧 Python venv 会保留在 `data/cache/runtime-before-move-*`，完成标记会失效，启动本地模式需要重新构建 venv。配置、会话和 checkout 不因此删除；重建可能需要联网。Desktop 的同机跨盘移动已通过；完整本地重建仍待验证。上一轮真实 bootstrap 暴露了 PR 构建引用错误，已修复并重新验证中，不能从 Desktop 能打开推断本地 Agent 已可迁移。
+移动整个目录后，旧 Python venv 与 Browser Use 的 uv 环境/启动器会保留在 `data/cache/runtime-before-move-*`，完成标记会失效，启动本地模式需要重新构建 venv。配置、会话和 checkout 不因此删除；重建可能需要联网。Desktop 的同机跨盘移动已通过；完整本地重建仍待验证。真实 bootstrap 已完成；长安装可能超过上游界面 45 秒连接等待，需要完成后点击一次 Retry。最近一次安装还出现浏览器 npm 超时及 TUI 退出码问题，相关修复待验证；不能据此宣称所有本地工具或搬迁已可用。
 
 ## 凭据与迁移
 

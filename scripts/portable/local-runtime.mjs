@@ -35,7 +35,11 @@ const report = { source: metadata.forkCommit, zipSha256: hash, checks: [], netwo
 function registry() {
   return execFileSync(shell, ['-NoProfile', '-Command', "@('Path','HERMES_HOME','HERMES_GIT_BASH_PATH') | ForEach-Object { [Environment]::GetEnvironmentVariable($_,'User') }"], { encoding: 'utf8' })
 }
+function cuaTasks() {
+  return execFileSync(shell, ['-NoProfile', '-Command', "@(Get-ScheduledTask -TaskName '*cua*' -ErrorAction SilentlyContinue | Select-Object TaskName,TaskPath,Actions | Sort-Object TaskPath,TaskName) | ConvertTo-Json -Depth 5 -Compress"], { encoding: 'utf8' })
+}
 const registryBefore = registry()
+const cuaTasksBefore = cuaTasks()
 const hostPaths = [
   path.join(os.homedir(), '.hermes'), path.join(os.homedir(), '.codex'), path.join(os.homedir(), '.ssh'),
   path.join(process.env.APPDATA, 'Hermes'), path.join(process.env.LOCALAPPDATA, 'hermes'),
@@ -77,8 +81,10 @@ async function launchAndBootstrap() {
   let selected = false
   let completed = false
   let previous = ''
+  let lastState
   while (Date.now() < deadline) {
     const state = await page.evaluate(() => window.hermesDesktop.getBootstrapState())
+    lastState = state
     if (state.error) {
       report.failedBootstrap = state
       throw new Error(`Real bootstrap failed: ${state.error}`)
@@ -92,6 +98,7 @@ async function launchAndBootstrap() {
     if (state.completedAt) { report.lastBootstrap = state; completed = true; break }
     await new Promise(resolve => setTimeout(resolve, 2000))
   }
+  if (!completed) report.failedBootstrap = lastState
   assert.ok(completed, 'Real local bootstrap must complete within 25 minutes')
   const runtimeSha = await app.evaluate(() => process.getBuiltinModule('child_process').execFileSync('git', [
     '-C', process.getBuiltinModule('path').join(process.env.HERMES_HOME, 'hermes-agent'), 'rev-parse', 'HEAD'
@@ -102,6 +109,13 @@ async function launchAndBootstrap() {
   const connection = await page.evaluate(() => window.hermesDesktop.getConnection())
   assert.ok(connection)
   report.connectionKeys = Object.keys(connection) // Never record backend session tokens.
+  // Upstream's renderer has a 45-second connection budget, while a fresh
+  // installer can take minutes. Exercise its visible, bounded recovery after
+  // installation; do not remove the production timeout or suppress errors.
+  if (await page.getByText("Hermes' background service didn't answer in time.", { exact: true }).isVisible()) {
+    await page.getByRole('button', { name: 'Retry', exact: true }).click()
+    mark('one normal Retry after the upstream renderer timed out during a long install')
+  }
   return current
 }
 async function sendAndSee(pair, text, reply) {
@@ -114,11 +128,12 @@ async function sendAndSee(pair, text, reply) {
 try {
   await launchAndBootstrap()
   mark('fresh local installation through actual packaged Desktop bootstrap')
+  assert.equal(registry(), registryBefore)
+  assert.equal(cuaTasks(), cuaTasksBefore)
+  mark('local installer leaves Windows user PATH/HERMES_HOME/Git Bash settings unchanged')
   await sendAndSee(current, 'Portable local runtime verification', MOCK_REPLY)
   assert.ok(mock.receivedPrompts.length)
   mark('real local backend and provider mock render a chat response')
-  assert.equal(registry(), registryBefore)
-  mark('local installer leaves Windows user PATH/HERMES_HOME/Git Bash settings unchanged')
   await current.page.screenshot({ path: path.join(out, 'local-runtime-window.png') })
   const backend = await current.page.evaluate(() => window.hermesDesktop.getConnection())
   report.checks.push(...await verifyRemote({ zip, scratch, backend, out, setImageUrl: url => { imageUrl = url }, reply: MOCK_REPLY }))
@@ -132,8 +147,15 @@ try {
   assert.equal(fs.readFileSync(path.join(root, 'data', 'hermes', 'config.yaml'), 'utf8'), preservedConfig)
   assert.ok(fs.readdirSync(path.join(root, 'data', 'cache')).some(n => n.startsWith('runtime-before-move-')))
   await sendAndSee(current, 'Portable rebuilt runtime verification', rebuiltReply)
+  const browserHelp = await current.app.evaluate(() => process.getBuiltinModule('child_process').execFileSync(
+    process.getBuiltinModule('path').join(process.env.HERMES_HOME, 'bin', 'browser-use.exe'), ['--help'],
+    { encoding: 'utf8', timeout: 60000 }
+  ))
+  assert.match(browserHelp, /usage|commands|options/i)
+  mark('moved managed browser-use launcher runs after its uv-tool environment is rebuilt')
   mark('moved checkout reconstructs a working venv and preserves user configuration')
   assert.equal(registry(), registryBefore)
+  assert.equal(cuaTasks(), cuaTasksBefore)
   assert.equal(crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex'), hash)
   for (let i = 0; i < hostPaths.length; i++) assert.deepEqual(snapshot(hostPaths[i]), hostBefore[i], `Host runtime profile changed: ${hostPaths[i]}`)
   assert.deepEqual(snapshot(root, true), programBefore, 'Managed persistence must not modify the program files outside data')

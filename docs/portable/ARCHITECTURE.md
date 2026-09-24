@@ -25,3 +25,11 @@
 API/backend 版本协商保持上游代码：backend 健康、serve/dashboard 能力探测、gateway JSON-RPC 和版本不匹配错误均未绕过。未改 Agent core、provider、OAuth 协议或渲染器功能。
 
 局限：Windows 原生 API 可按账户查询已知文件夹，不能仅凭环境变量推断所有第三方模块都遵守隔离；需由实际泄漏检测及本地运行时测试证明。data 下用户自行添加的深层链接、外部项目和外部 SSH key 不应视为自动可搬迁文件。首次 SSH 主机仍沿用上游 TOFU；遇到 changed host key 继续失败。
+
+## 后续运行时审计
+
+run 35990997824 的真实安装发现 Browser npm 超时和 TUI launcher 的 null exit code，Portable 分支改用自持 .NET Process handle；上游 renderer 的 45 秒连接超时保持不变，测试使用一次可见 Retry 验证普通恢复路径。
+
+Cua 官方安装脚本（`trycua/cua/libs/cua-driver/scripts/install.ps1`）包含用户 PATH、全局 `cua-driver-serve` 任务重注册和其他进程处理；`-NoAutoStart` 仍可能重注册既有任务，不能作为 Portable 隔离保证。Portable 不执行该脚本，只下载官方 `cua-driver-rs-v0.28.2` 的 `cua-driver-rs-0.28.2-windows-x86_64.zip`，SHA256 `3c1fcf10ff9513b94e4af78ad6a216ab62aa95b2c9a3b70dfbdba9f04e021533`，保留归档随附文件并在私有路径执行原有 runtime contract 检查。现有 `HERMES_CUA_DRIVER_CMD` 指向私有 binary。没有改写 Agent core/provider。
+
+uv 安装的 Browser Use launcher 同样记录绝对解释器路径；移动时备份其私有环境和 exe，并让原有安装流程重新生成。用户配置、会话及其他工具目录不因该操作删除。

@@ -43,6 +43,10 @@ it('invalidates a moved venv without deleting configuration, sessions or the old
   const runtime = path.join(p.hermes, 'hermes-agent')
 
   fs.mkdirSync(path.join(runtime, 'venv'), { recursive: true })
+  fs.mkdirSync(path.join(p.hermes, 'uv-tools', 'browser-use'), { recursive: true })
+  fs.mkdirSync(path.join(p.hermes, 'bin'), { recursive: true })
+  fs.writeFileSync(path.join(p.hermes, 'bin', 'browser-use.exe'), 'old tool launcher')
+  fs.writeFileSync(path.join(p.hermes, 'uv-tools', 'browser-use', 'pyvenv.cfg'), 'old tool interpreter')
   fs.mkdirSync(p.cache, { recursive: true })
   fs.writeFileSync(path.join(runtime, 'venv', 'pyvenv.cfg'), 'old absolute interpreter path')
   fs.writeFileSync(path.join(runtime, '.hermes-bootstrap-complete'), 'old marker')
@@ -51,6 +55,8 @@ it('invalidates a moved venv without deleting configuration, sessions or the old
   fs.writeFileSync(path.join(p.data, 'portable-location.json'), JSON.stringify({ root: path.join(root, 'old') }))
   preparePortableRuntime(p)
   expect(fs.existsSync(path.join(runtime, 'venv'))).toBe(false)
+  expect(fs.existsSync(path.join(p.hermes, 'bin', 'browser-use.exe'))).toBe(false)
+  expect(fs.existsSync(path.join(p.hermes, 'uv-tools', 'browser-use'))).toBe(false)
   expect(fs.existsSync(path.join(runtime, '.hermes-bootstrap-complete'))).toBe(false)
   expect(fs.readFileSync(path.join(p.hermes, 'config.yaml'), 'utf8')).toBe('sentinel')
   expect(fs.readFileSync(path.join(p.hermes, 'state.db'), 'utf8')).toBe('sessions')
@@ -58,6 +64,8 @@ it('invalidates a moved venv without deleting configuration, sessions or the old
 
   expect(backups).toHaveLength(1)
   expect(fs.readFileSync(path.join(p.cache, backups[0], 'venv', 'pyvenv.cfg'), 'utf8')).toContain('old absolute')
+  expect(fs.readFileSync(path.join(p.cache, backups[0], 'browser-use-env', 'pyvenv.cfg'), 'utf8')).toBe('old tool interpreter')
+  expect(fs.readFileSync(path.join(p.cache, backups[0], 'browser-use.exe'), 'utf8')).toBe('old tool launcher')
   preparePortableRuntime(p)
   expect(fs.readdirSync(p.cache)).toEqual(backups)
 })

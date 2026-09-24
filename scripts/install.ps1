@@ -3690,8 +3690,20 @@ function Install-NodeDeps {
         [string]$logPath, [int]$timeoutSec
     ) {
         $cmdLine = "/d /s /c "" ""$exePath"" $argLine > ""$logPath"" 2>&1 """
-        $proc = Start-Process -FilePath $env:ComSpec -ArgumentList $cmdLine `
-            -WorkingDirectory $workDir -NoNewWindow -PassThru
+        if ($Portable) {
+            # Own the native process handle so PS 5.1 cannot report a null
+            # ExitCode for a completed managed npm invocation.
+            $proc = New-Object System.Diagnostics.Process
+            $proc.StartInfo.FileName = $env:ComSpec
+            $proc.StartInfo.Arguments = $cmdLine
+            $proc.StartInfo.WorkingDirectory = $workDir
+            $proc.StartInfo.UseShellExecute = $false
+            $proc.StartInfo.CreateNoWindow = $true
+            [void]$proc.Start()
+        } else {
+            $proc = Start-Process -FilePath $env:ComSpec -ArgumentList $cmdLine `
+                -WorkingDirectory $workDir -NoNewWindow -PassThru
+        }
         $deadline = [DateTime]::UtcNow.AddSeconds($timeoutSec)
         $shown = 0
         function _Drain-NewLines([string]$path, [ref]$count) {
@@ -3712,6 +3724,7 @@ function Install-NodeDeps {
             _Drain-NewLines $logPath ([ref]$shown)
         }
         _Drain-NewLines $logPath ([ref]$shown)
+        if ($Portable) { $proc.WaitForExit() }
         return $proc.ExitCode
     }
 
@@ -4002,6 +4015,40 @@ function Test-CuaDriverRuntimeContract {
 function Install-CuaDriver {
     if ($SkipComputerUse) {
         Write-Info "Skipping Computer Use (cua-driver) install (-SkipComputerUse)"
+        return
+    }
+    if ($Portable) {
+        # The upstream Cua installer modifies User PATH, scheduled tasks and
+        # other Cua processes even with some opt-outs. Use its exact official
+        # release archive directly; never run that system integration script.
+        $driverDir = Join-Path $HermesHome "cua\bin"
+        $driver = Join-Path $driverDir "cua-driver.exe"
+        if ((Test-Path $driver) -and (Test-CuaDriverRuntimeContract -DriverPath $driver)) {
+            Write-Success "Private Computer Use driver already installed and compatible"
+            return
+        }
+        $archive = Join-Path $env:TEMP "portable-cua-0.28.2.zip"
+        $stage = Join-Path $env:TEMP ("portable-cua-" + [Guid]::NewGuid().ToString("N"))
+        try {
+            $url = "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.28.2/cua-driver-rs-0.28.2-windows-x86_64.zip"
+            Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing
+            $expected = "3c1fcf10ff9513b94e4af78ad6a216ab62aa95b2c9a3b70dfbdba9f04e021533"
+            if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
+                throw "Private Cua archive SHA256 mismatch"
+            }
+            Expand-Archive -LiteralPath $archive -DestinationPath $stage
+            $binary = Get-ChildItem -LiteralPath $stage -Recurse -Filter "cua-driver.exe" | Select-Object -First 1
+            if (-not $binary) { throw "Private Cua archive contains no driver" }
+            New-Item -ItemType Directory -Path $driverDir -Force | Out-Null
+            Get-ChildItem -LiteralPath $binary.Directory.FullName | Copy-Item -Destination $driverDir -Recurse -Force
+            if (-not (Test-CuaDriverRuntimeContract -DriverPath $driver)) {
+                throw "Private Cua driver failed the upstream runtime contract"
+            }
+            Write-Success "Private Computer Use driver 0.28.2 installed; User PATH and autostart unchanged"
+        } finally {
+            Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+        }
         return
     }
     $existingCuaDriver = Get-Command cua-driver -ErrorAction SilentlyContinue

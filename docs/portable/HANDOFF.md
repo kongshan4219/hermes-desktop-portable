@@ -4,9 +4,11 @@
 
 开发分支：`portable/bootstrap-windows-ci`。草稿 [PR #1](https://github.com/kongshan4219/hermes-desktop-portable/pull/1)。默认 main 未合并，未公开发布。以 PR 当前 head 为最新源码 SHA；每个产物记录自身完整 SHA，不能用旧 run 代表当前 head。
 
-最新完整记录为源码 `72011e6ef4d4b4dedf02ac426819443a332a66a2`，[run 35989414777](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35989414777)：Windows 类型/lint/精选回归/打包/最终 ZIP smoke、Linux 完整套件和独立机器凭据恢复均通过。本地 runtime 在 repository 阶段失败：Git checkout 深层文档路径超过 MAX_PATH；ZIP fallback 又把成功 git init 的 stderr 提示当成异常。当前补丁只对 Portable 私有 Git 配置启用 core.longpaths，并以 native exit code 判断 git init。尚未执行到真实 backend、远程联调与 venv 重建，仍需下一轮验证。
+最新已完成的 run 为 [35990997824](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35990997824)，源码 `fabadc85ec1dc15721239577a7f91ba089c595be`。Windows 类型/lint/精选回归/最终 ZIP smoke、Linux 完整平台套件、独立机器凭据恢复全部通过。真实本地 bootstrap 也完成，实际 checkout SHA 与 ZIP 一致。但 npm 浏览器安装达到上游 10 分钟超时，TUI launcher 返回 null exit code；安装总时长约 15 分钟，超过上游 renderer 45 秒连接等待，随后 UI 停在可恢复的 Retry 页面，聊天断言未执行。
 
-前一轮 `3ae28576...` 的 PR 合成 ref `1/merge` install-stamp 问题已修复：构建子进程显式写入真实源码 SHA/branch，打包检查 commit/branch/dirty；修复模式同样固定到审核 SHA。72011e6 的打包断言已通过。
+当前补丁：测试使用一次官方 Retry 恢复（不改变产品超时或吞错）；Portable npm launcher 自持 .NET process handle；Computer Use 改为固定摘要的官方 Cua 0.28.2 ZIP 私有解压，避免上游安装器全局 PATH/任务/进程副作用；Browser Use 的 uv 环境及 launcher 随 venv 备份重建。新增用户环境和 Cua 计划任务快照，以及迁移后 Browser Use 可执行验证。上述新增项待下一轮 CI，不宣称通过。
+
+install-stamp 的 PR ref 与 Git 深层路径问题已修复并实测通过。远程联调、聊天、完整搬迁重建仍未验收。
 
 先前修复与已观察证据：
 
@@ -16,7 +18,7 @@
 - 发现并修复 Portable 拒绝上游“未保存测试令牌”明文内存对象的问题：现在只在内存中经现有安全接口加密，不写配置。加入新输入令牌必须到达 HTTP mock 的回归。
 - 跨机器凭据恢复已通过；完整本地/远程联调尚未通过，不把脚本已接入当成验收成功。
 
-最近通过 Desktop smoke / 跨机器凭据、但本地 bootstrap 未通过的 ZIP：`Hermes-0.17.6-portable.1-win-x64.zip`，来源 `72011e6ef4d4b4dedf02ac426819443a332a66a2`，SHA256 `0802dbd5511fddcc497f6a5f9f1948edfadb9d1cca6b75d72612423d58912624`，[artifact 10803966450](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35989414777/artifacts/10803966450)。仅候选，保留 7 天。此处哈希是内层实际 ZIP，不是 GitHub artifact 外层归档哈希。
+最近候选 ZIP：`Hermes-0.17.6-portable.1-win-x64.zip`，来源 `fabadc85ec1dc15721239577a7f91ba089c595be`，SHA256 `e168dd64b52db07ca1b7fc1f813c5b0609d0db110ad6bc616eee3857c6ed6efb`，[artifact 10804526772](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35990997824/artifacts/10804526772)。Desktop smoke/跨机器凭据通过，安装流程完成但本地/远程使用尚未通过；不是已验收发行包。候选保留 7 天。哈希是内层实际 ZIP，不是 artifact 外层归档摘要。
 
 实现位置：`electron/portable.ts` 集中路径/环境/迁移；entry 早期调用；main 处理凭据、更新器、协议注册及 sandbox；ssh-connection 注入私有 SSH options；bootstrap-runner 选择随包安装器；install.ps1 约束 Portable 的进程环境；scripts/portable 负责干净 ZIP、测试、同步和草稿发布。
 

@@ -19,11 +19,11 @@
 
 ## 最新通过的打包程序检查
 
-来源 `72011e6ef4d4b4dedf02ac426819443a332a66a2`，[run 35989414777](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35989414777)：Windows 构建与完整 ZIP smoke 已通过，Linux 完整套件通过。实际 ZIP SHA256：`0802dbd5511fddcc497f6a5f9f1948edfadb9d1cca6b75d72612423d58912624`。
+来源 `fabadc85ec1dc15721239577a7f91ba089c595be`，[run 35990997824](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35990997824)：Windows 构建与完整 ZIP smoke 已通过，Linux 完整套件通过。实际 ZIP SHA256：`e168dd64b52db07ca1b7fc1f813c5b0609d0db110ad6bc616eee3857c6ed6efb`。
 
 已通过：私有 Electron/session/partition 路径、子进程环境、外部环境覆盖、中文/日文/空格/括号路径、不同 cwd、缩减 PATH、随包 SSH 私有配置解析、新输入但未保存的令牌测试、强制加密、禁止覆盖更新、无 flag 上游策略及安装版并发隔离、C→D 跨盘后的 IndexedDB/localStorage/cookies/可用加密令牌、持久文件无原文/base64 测试令牌、升级 data 哨兵、只读 ACL 明确失败、目标宿主目录快照不变、原始 ZIP 哈希不变。
 
-独立 Windows job 的凭据恢复测试也已通过：旧 DPAPI 令牌不可解密，原连接配置字节未被改写，明确要求重新认证，新令牌加密保存。PR 合成引用 `1/merge` 的 install stamp 问题已修复并通过打包断言。最新本地 bootstrap 失败于 repository 阶段的深层 Git 路径及 ZIP fallback stderr；当前补丁启用 Portable 私有 Git 长路径并修复退出码处理，尚未到达远程联调和迁移重建。本段不代表全部 Portable 验收通过。
+独立 Windows job 的凭据恢复已通过：旧 DPAPI 令牌不可解密，原连接配置字节不变，明确要求重新认证，新令牌加密保存。本地 bootstrap 的 install stamp 和 Git 长路径问题已解决；此 run 完成真实安装并验证 checkout SHA。安装耗时约 15 分钟，renderer 的上游 45 秒连接等待已超时，UI 显示 Retry，首次聊天尚未发送。安装还记录 Browser npm 超时和 TUI null exit code，不能据“bootstrap 完成”宣称所有本地可选工具正常。当前补丁增加普通 Retry 恢复及隔离/运行时修复，尚待下一轮证据。
 
 ## 可执行测试
 
@@ -37,7 +37,7 @@ Windows 回归选择 Portable、Windows 专属、bootstrap、backend env、nativ
 
 ## 尚未完成的关键验收
 
-- 全新本地 Agent 自动 bootstrap、真实 backend 可用、搬迁后完整 venv 重建及联网/离线边界。
+- 真实 bootstrap 流程已完成；实际聊天、完整 venv/Browser Use 重建及联网/离线边界仍未通过。
 - SSH 私有配置、known_hosts、变更主机密钥拒绝的完整原生联调；随包 OpenSSH 在普通 Windows 下的完整认证与主机密钥回归。
 - 同一机器的另一个 Windows 用户；跨机器 browser cookie 恢复（不能从 DPAPI token 测试推断）。
 - 实际远程 gateway mock 的连接成功、认证失败、断线重连、聊天、工具状态、图片显示。

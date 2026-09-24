@@ -77,15 +77,23 @@ export function preparePortableRuntime(p: PortablePaths) {
 
   if (previous && path.resolve(previous).toLowerCase() !== p.root.toLowerCase()) {
     const runtime = path.join(p.hermes, 'hermes-agent')
-    const venv = path.join(runtime, 'venv')
+    const environments = [
+      [path.join(runtime, 'venv'), 'venv'],
+      [path.join(p.hermes, 'uv-tools', 'browser-use'), 'browser-use-env'],
+      [path.join(p.hermes, 'bin', 'browser-use.exe'), 'browser-use.exe']
+    ]
 
-    if (fs.existsSync(venv)) {
-      // venv launchers and pyvenv.cfg contain absolute paths. Never edit
+    if (environments.some(([source]) => fs.existsSync(source))) {
+      // venv and uv-tool launchers contain absolute paths. Never edit
       // arbitrary user files or pretend the old interpreter is relocatable.
       const backup = path.join(p.cache, `runtime-before-move-${Date.now()}`)
 
       fs.mkdirSync(backup)
-      fs.renameSync(venv, path.join(backup, 'venv'))
+      for (const [source, name] of environments) {
+        if (fs.existsSync(source)) {
+          fs.renameSync(source, path.join(backup, name))
+        }
+      }
 
       const complete = path.join(runtime, '.hermes-bootstrap-complete')
 
@@ -137,6 +145,7 @@ export function initializePortable(app: App): PortablePaths | null {
   const managedPath = [
     path.join(p.hermes, 'node'),
     path.join(p.hermes, 'bin'),
+    path.join(p.hermes, 'cua', 'bin'),
     path.join(p.hermes, 'git', 'cmd'),
     path.join(p.hermes, 'git', 'bin'),
     path.join(p.root, 'resources', 'portable', 'git', 'cmd'),
@@ -159,6 +168,7 @@ export function initializePortable(app: App): PortablePaths | null {
     PATH: managedPath.join(path.delimiter),
     HERMES_HOME: p.hermes,
     HERMES_GIT_BASH_PATH: path.join(p.root, 'resources', 'portable', 'git', 'bin', 'bash.exe'),
+    HERMES_CUA_DRIVER_CMD: path.join(p.hermes, 'cua', 'bin', 'cua-driver.exe'),
     HERMES_DESKTOP_USER_DATA_DIR: p.desktop,
     HERMES_DESKTOP_IGNORE_EXISTING: '1',
     HERMES_DESKTOP_ISOLATED_BACKEND: '1',
@@ -178,6 +188,7 @@ export function initializePortable(app: App): PortablePaths | null {
     PLAYWRIGHT_BROWSERS_PATH: path.join(p.cache, 'browsers'),
     HF_HOME: path.join(p.cache, 'huggingface'),
     TORCH_HOME: path.join(p.cache, 'torch'),
+    CUA_DRIVER_RS_HOME: path.join(p.hermes, 'cua', 'home'),
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_CONFIG_GLOBAL: path.join(p.home, '.gitconfig'),
     GIT_TERMINAL_PROMPT: '0'
