@@ -105,6 +105,20 @@ async function launchAndBootstrap() {
   ], { encoding: 'utf8' }).trim())
   assert.equal(runtimeSha, metadata.forkCommit, 'Fresh and moved runtime must remain on the reviewed source commit')
   report.runtimeCommit = runtimeSha
+  const interpreters = await app.evaluate(() => {
+    const p = process.getBuiltinModule('path')
+    const cp = process.getBuiltinModule('child_process')
+    return [
+      p.join(process.env.HERMES_HOME, 'hermes-agent', 'venv', 'Scripts', 'python.exe'),
+      p.join(process.env.HERMES_HOME, 'uv-tools', 'browser-use', 'Scripts', 'python.exe')
+    ].map(exe => JSON.parse(cp.execFileSync(exe, ['-c', 'import json,sys; print(json.dumps(dict(executable=sys.executable,base=sys.base_prefix)))'], { encoding: 'utf8', timeout: 60000 })))
+  })
+  const privatePython = path.join(root, 'data', 'hermes', 'hermes-agent', '.hermes-runtime', 'python').toLowerCase() + path.sep
+  for (const interpreter of interpreters) {
+    assert.ok(interpreter.base.toLowerCase().startsWith(privatePython), 'Tool and Agent interpreters must use private managed Python, never runner Python')
+    assert.ok(interpreter.executable.toLowerCase().startsWith(path.join(root, 'data').toLowerCase() + path.sep))
+  }
+  mark('Agent and Browser Use interpreters use checkout-private Python')
   await page.waitForSelector('textarea, [contenteditable="true"]', { timeout: 120000 })
   const connection = await page.evaluate(() => window.hermesDesktop.getConnection())
   assert.ok(connection)
@@ -112,7 +126,11 @@ async function launchAndBootstrap() {
   // Upstream's renderer has a 45-second connection budget, while a fresh
   // installer can take minutes. Exercise its visible, bounded recovery after
   // installation; do not remove the production timeout or suppress errors.
-  if (await page.getByText("Hermes' background service didn't answer in time.", { exact: true }).isVisible()) {
+  const connectionTimeout = page.getByText("Hermes' background service didn't answer in time.", { exact: true })
+  // Bootstrap completion can precede this renderer error by 45 seconds. Wait
+  // for readiness or the visible error instead of sampling it only once.
+  await Promise.race([waitReady(page), connectionTimeout.waitFor({ state: 'visible', timeout: 120000 })])
+  if (await connectionTimeout.isVisible()) {
     await page.getByRole('button', { name: 'Retry', exact: true }).click()
     mark('one normal Retry after the upstream renderer timed out during a long install')
   }

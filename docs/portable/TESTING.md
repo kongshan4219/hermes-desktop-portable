@@ -19,11 +19,13 @@
 
 ## 最新通过的打包程序检查
 
-来源 `fabadc85ec1dc15721239577a7f91ba089c595be`，[run 35990997824](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35990997824)：Windows 构建与完整 ZIP smoke 已通过，Linux 完整套件通过。实际 ZIP SHA256：`e168dd64b52db07ca1b7fc1f813c5b0609d0db110ad6bc616eee3857c6ed6efb`。
+来源 `a52dc422486e4ef9b6313436f4949bb2311ab7ef`，[run 35997301234](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35997301234)：Windows 构建与完整 ZIP smoke 已通过，Linux 完整套件通过。实际 ZIP SHA256：`aa9fc67b40ef042026d1a2ebcda8d324173f6c063daa9c6623c33073dba284d9`。
 
 已通过：私有 Electron/session/partition 路径、子进程环境、外部环境覆盖、中文/日文/空格/括号路径、不同 cwd、缩减 PATH、随包 SSH 私有配置解析、新输入但未保存的令牌测试、强制加密、禁止覆盖更新、无 flag 上游策略及安装版并发隔离、C→D 跨盘后的 IndexedDB/localStorage/cookies/可用加密令牌、持久文件无原文/base64 测试令牌、升级 data 哨兵、只读 ACL 明确失败、目标宿主目录快照不变、原始 ZIP 哈希不变。
 
-独立 Windows job 的凭据恢复已通过：旧 DPAPI 令牌不可解密，原连接配置字节不变，明确要求重新认证，新令牌加密保存。本地 bootstrap 的 install stamp 和 Git 长路径问题已解决；此 run 完成真实安装并验证 checkout SHA。安装耗时约 15 分钟，renderer 的上游 45 秒连接等待已超时，UI 显示 Retry，首次聊天尚未发送。安装还记录 Browser npm 超时和 TUI null exit code，不能据“bootstrap 完成”宣称所有本地可选工具正常。当前补丁增加普通 Retry 恢复及隔离/运行时修复，尚待下一轮证据。
+独立 Windows job 的凭据恢复已通过：旧 DPAPI 令牌不可解密，原连接配置字节不变，明确要求重新认证，新令牌加密保存。真实本地 bootstrap、固定 checkout SHA、私有 Cua runtime contract、用户环境和 Cua 任务不变均通过。TUI 安装成功；Browser npm 仍超时。
+
+此 run 在首次聊天前等待界面就绪失败；失败截图显示连接超时及 Retry。测试在错误稍后出现前只检查了一次，因此未点击 Retry。当前补上有界等待后的一次普通 Retry，并加入 Agent/Browser Use 私有 Python 来源断言；未将这些后续修改标为通过。远程联调及完整迁移尚未执行。
 
 ## 可执行测试
 
@@ -41,7 +43,7 @@ Windows 回归选择 Portable、Windows 专属、bootstrap、backend env、nativ
 - SSH 私有配置、known_hosts、变更主机密钥拒绝的完整原生联调；随包 OpenSSH 在普通 Windows 下的完整认证与主机密钥回归。
 - 同一机器的另一个 Windows 用户；跨机器 browser cookie 恢复（不能从 DPAPI token 测试推断）。
 - 实际远程 gateway mock 的连接成功、认证失败、断线重连、聊天、工具状态、图片显示。
-- 已完成 Desktop C→D 跨盘迁移及与无 flag 副本并发；两个 Portable 副本、本地 bootstrap registry/宿主目录/程序目录快照的后续步骤仍待 local-runtime 作业完成。
+- 已完成 Desktop C→D 跨盘迁移及与无 flag 副本并发；两个 Portable 副本、完整本地宿主目录/程序目录快照的后续步骤仍待 local-runtime 作业完成；首次 bootstrap 的用户环境和 Cua 任务不变已通过。
 - 可选本地 rg/ffmpeg 等依赖的私有供应及能力验证。
 - 正式 schedule、同步候选 SHA CI、冲突 Issue 和草稿发布链路，等待默认分支合入及权限配置。
 

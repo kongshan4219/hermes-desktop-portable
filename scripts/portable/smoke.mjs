@@ -84,6 +84,10 @@ async function inspect(app) {
       partition: session.fromPartition('persist:portable-ci').getStoragePath(),
       childHomeCorrect: child.includes(`HERMES_HOME=${process.env.HERMES_HOME}`),
       inheritedCredential: child.includes('portable-test-must-not-inherit'),
+      managedPython: child.includes('UV_MANAGED_PYTHON=1'),
+      pythonRoot: process.env.UV_PYTHON_INSTALL_DIR,
+      pythonRegistry: process.env.UV_PYTHON_INSTALL_REGISTRY,
+      npmPrefix: process.env.NPM_CONFIG_PREFIX,
       hermes: process.env.HERMES_HOME,
       path: process.env.PATH
     }
@@ -120,6 +124,10 @@ try {
   assert.equal(info.sandboxDisabled, false)
   assert.ok(info.childHomeCorrect)
   assert.equal(info.inheritedCredential, false)
+  assert.equal(info.managedPython, true)
+  assert.equal(info.pythonRegistry, '0')
+  assert.equal(info.pythonRoot, path.join(root, 'data', 'hermes', 'hermes-agent', '.hermes-runtime', 'python'))
+  assert.ok(info.path.split(path.delimiter).includes(info.npmPrefix))
   assert.equal(fs.existsSync(path.join(scratch, 'forbidden-hermes')), false)
   assert.equal(fs.existsSync(path.join(scratch, 'forbidden-desktop')), false)
   report.runtime = info

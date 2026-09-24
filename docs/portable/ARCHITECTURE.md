@@ -33,3 +33,5 @@ run 35990997824 的真实安装发现 Browser npm 超时和 TUI launcher 的 nul
 Cua 官方安装脚本（`trycua/cua/libs/cua-driver/scripts/install.ps1`，已在发布目标 commit `fc188250b4ca8549b8e61f937fdb1fb560770e86` 核对）包含用户 PATH、全局 `cua-driver-serve` 任务重注册和其他进程处理；`-NoAutoStart` 仍可能重注册既有任务，不能作为 Portable 隔离保证。Portable 不执行该脚本，只下载官方 `cua-driver-rs-v0.28.2` 的 `cua-driver-rs-0.28.2-windows-x86_64.zip`，SHA256 `3c1fcf10ff9513b94e4af78ad6a216ab62aa95b2c9a3b70dfbdba9f04e021533`，保留归档随附文件并在私有路径执行原有 runtime contract 检查。现有 `HERMES_CUA_DRIVER_CMD` 指向私有 binary。没有改写 Agent core/provider。
 
 uv 安装的 Browser Use launcher 同样记录绝对解释器路径；移动时备份其私有环境和 exe，并让原有安装流程重新生成。用户配置、会话及其他工具目录不因该操作删除。
+
+各 bootstrap 阶段是独立 PowerShell 进程，Python 阶段的 managed-only 设置不会自动传给 node-deps/Browser Use。Portable 父进程统一设置 `UV_MANAGED_PYTHON=1`、私有 `UV_PYTHON_INSTALL_DIR`、禁止 Python registry/bin 注册；延续上游 `Initialize-ManagedPythonEnvironment` 的规则。实际测试同时检查 Agent venv 与 Browser Use 的 `sys.base_prefix` 必须属于当前 checkout 的 `.hermes-runtime/python`，避免 runner 预装 Python 造成假通过。私有 npm 全局 prefix 同时纳入受控 PATH。
