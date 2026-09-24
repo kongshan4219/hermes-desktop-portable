@@ -64,10 +64,13 @@ jobs:
         working-directory: apps/desktop
         run: npx vitest run --project electron electron/portable.test.ts electron/windows- electron/bootstrap-runner.test.ts electron/backend-env.test.ts electron/native-token-store.test.ts electron/secret-storage-policy.test.ts --reporter=default --reporter=json --outputFile=../../build-evidence/windows-tests.json
       - name: Build official unpacked Windows app
-        env:
-          GITHUB_REF_NAME: main
-          GITHUB_SHA: ${{ inputs.source_sha }}
-        run: npm run pack --workspace apps/desktop
+        run: |
+          # The runner owns default GITHUB_* workflow variables. Set the child
+          # process environment explicitly so the install stamp never uses a
+          # synthetic PR merge SHA or the non-branch "1/merge" ref name.
+          $env:GITHUB_SHA = (git rev-parse HEAD).Trim()
+          $env:GITHUB_REF_NAME = 'main'
+          npm run pack --workspace apps/desktop
       - name: Create clean Portable ZIP
         run: ./scripts/portable/package.ps1
       - name: Exercise executable from final ZIP

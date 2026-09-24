@@ -12,10 +12,18 @@
 | 完整 Electron 平台套件放在 Windows | 失败：2322 passed / 43 failed / 25 skipped。失败含 getuid、POSIX chmod、ControlMaster、路径格式、Windows临时目录与进程时序；不能把这些测试说成通过 |
 | Portable 新增路径/搬迁单元测试 | 上述 run 中通过；仅为单元证据 |
 | 完整平台套件迁至普通 Linux runner | 已通过：commit `5e159e0765acc4504e609ac7449be0a0910b429f`，run [35985127566](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35985127566)，2388 passed / 2 skipped；GUI 保持 Chromium sandbox |
-| 最终 ZIP 的真实 exe smoke | 上述 run 构建/打包成功；smoke 在中文路径子进程环境断言失败（测试按 UTF-8 解码 cmd 输出）；下一提交修正为 cmd /u + UTF-16LE 并重新验证 |
+| 较早 smoke 编码失败（已解决） | 上述 run 构建/打包成功；中文路径 cmd 输出按 UTF-8 解码导致失败，后续改为 /u + UTF-16LE；最新完整 smoke 已通过 |
 | 随包 Git/OpenSSH 首轮 | commit `7901ea456390fbe3b772ea63bcba34991ff1ad0a`，run [35986064975](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35986064975) 构建成功；测试在 PowerShell Expand-Archive 超时，未到达应用启动。改用系统 ZIP API 后重跑 |
 | 实际 exe 路径与 SSH config | commit `a840966519cf3b4e5a1f8d66b9cd4a09c8c87d25`，run [35986781900](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35986781900)：私有路径、子进程、中文路径、不同 cwd、缩减 PATH、随包 SSH 配置解析已通过。smoke 随后因测试误把 updater 的结构化拒绝当成 throw 而失败，正在修正断言 |
-| 独立 Windows job 凭据失效/重新认证 | 待运行，以 cross-machine-report.json 为准 |
+| 独立 Windows job 凭据失效/重新认证 | 已通过：run 35988037957，job 107597138126；以匹配 source/ZIP 的 cross-machine-report.json 为准 |
+
+## 最新通过的打包程序检查
+
+来源 `3ae28576e6d9c78be0c5ea85e84e2cbb10ff8ca8`，[run 35988037957](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35988037957)：Windows 构建与完整 ZIP smoke 已通过，Linux 完整套件通过。实际 ZIP SHA256：`f6c67aef4f15d966a0f9de195b14c9fbb7821322c6c0b135a10d7a815e616ed4`。
+
+已通过：私有 Electron/session/partition 路径、子进程环境、外部环境覆盖、中文/日文/空格/括号路径、不同 cwd、缩减 PATH、随包 SSH 私有配置解析、新输入但未保存的令牌测试、强制加密、禁止覆盖更新、无 flag 上游策略及安装版并发隔离、C→D 跨盘后的 IndexedDB/localStorage/cookies/可用加密令牌、持久文件无原文/base64 测试令牌、升级 data 哨兵、只读 ACL 明确失败、目标宿主目录快照不变、原始 ZIP 哈希不变。
+
+独立 Windows job 的凭据恢复测试也已通过：旧 DPAPI 令牌不可解密，原连接配置字节未被改写，明确要求重新认证，新令牌加密保存。真实本地 bootstrap 随后失败于 repository 阶段：install stamp 的分支值为 PR 合成引用 `1/merge`。尚未到达远程联调和迁移重建；后续修复并重新校验 stamp 与 source SHA。本段不代表全部 Portable 验收通过。
 
 ## 可执行测试
 
@@ -33,7 +41,7 @@ Windows 回归选择 Portable、Windows 专属、bootstrap、backend env、nativ
 - SSH 私有配置、known_hosts、变更主机密钥拒绝的完整原生联调；随包 OpenSSH 在普通 Windows 下的完整认证与主机密钥回归。
 - 同一机器的另一个 Windows 用户；跨机器 browser cookie 恢复（不能从 DPAPI token 测试推断）。
 - 实际远程 gateway mock 的连接成功、认证失败、断线重连、聊天、工具状态、图片显示。
-- 更换盘符、多个 Portable 副本并发、用户环境 registry 前后快照、本地 bootstrap 全过程泄漏检查。
+- 已完成 Desktop C→D 跨盘迁移及与无 flag 副本并发；两个 Portable 副本、本地 bootstrap registry/宿主目录/程序目录快照的后续步骤仍待 local-runtime 作业完成。
 - 可选本地 rg/ffmpeg 等依赖的私有供应及能力验证。
 - 正式 schedule、同步候选 SHA CI、冲突 Issue 和草稿发布链路，等待默认分支合入及权限配置。
 

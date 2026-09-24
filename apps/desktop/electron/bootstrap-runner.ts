@@ -967,9 +967,11 @@ async function runBootstrap(opts) {
 
   try {
     const existingCheckout = hasExistingGitCheckout(activeRoot)
-    const pinCommit = !existingCheckout
+    // Portable runtime repair must not switch a detached candidate checkout
+    // back to the clone branch. The installer retains its no-rollback guard.
+    const pinCommit = !existingCheckout || Boolean(portablePaths())
 
-    if (existingCheckout && installStamp && installStamp.commit) {
+    if (existingCheckout && installStamp && installStamp.commit && !portablePaths()) {
       emit({
         type: 'log',
         line:

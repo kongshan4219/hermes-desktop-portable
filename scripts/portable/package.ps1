@@ -15,6 +15,11 @@ Copy-Item "$source/*" $stage -Recurse
 New-Item -ItemType File "$stage/portable.flag" | Out-Null
 New-Item -ItemType Directory "$stage/resources/portable" -Force | Out-Null
 Copy-Item scripts/install.ps1 "$stage/resources/portable/install.ps1"
+$stamp = Get-Content "$stage/resources/install-stamp.json" -Raw | ConvertFrom-Json
+if ($stamp.commit -cne $sha -or $stamp.branch -cne 'main' -or $stamp.dirty) {
+    throw 'Bundled runtime install stamp must pin the exact checked-out source SHA and a real clone branch'
+}
+
 # Unmodified official PortableGit includes OpenSSH, its DLLs, Bash and licenses.
 # Pin both origin release and SHA256; never package a runner's installed tools.
 $gitUrl = 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/PortableGit-2.55.0.5-64-bit.7z.exe'

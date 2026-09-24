@@ -93,6 +93,11 @@ async function launchAndBootstrap() {
     await new Promise(resolve => setTimeout(resolve, 2000))
   }
   assert.ok(completed, 'Real local bootstrap must complete within 25 minutes')
+  const runtimeSha = await app.evaluate(() => process.getBuiltinModule('child_process').execFileSync('git', [
+    '-C', process.getBuiltinModule('path').join(process.env.HERMES_HOME, 'hermes-agent'), 'rev-parse', 'HEAD'
+  ], { encoding: 'utf8' }).trim())
+  assert.equal(runtimeSha, metadata.forkCommit, 'Fresh and moved runtime must remain on the reviewed source commit')
+  report.runtimeCommit = runtimeSha
   await page.waitForSelector('textarea, [contenteditable="true"]', { timeout: 120000 })
   const connection = await page.evaluate(() => window.hermesDesktop.getConnection())
   assert.ok(connection)
