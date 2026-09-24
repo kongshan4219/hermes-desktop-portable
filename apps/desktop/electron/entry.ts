@@ -1,7 +1,23 @@
-import { app } from 'electron'
+import { app, dialog } from 'electron'
 
+import { initializePortable } from './portable'
 import { wslgLaunchArgs } from './wslg-launch'
 import { spawnWslgLaunch } from './wslg-launch-process'
+
+try {
+  initializePortable(app)
+} catch (error) {
+  const message = `Portable initialization failed. Move the complete folder to a writable location. No fallback profile was opened.\n${error instanceof Error ? error.message : String(error)}`
+
+  console.error(message)
+
+  if (!process.argv.includes('--portable-diagnostics')) {
+    dialog.showErrorBox('Hermes Portable', message)
+  }
+
+  app.exit(1)
+  throw error
+}
 
 const args = wslgLaunchArgs(process.argv.slice(1), process.env, process.platform)
 
@@ -24,3 +40,4 @@ if (args) {
 } else {
   await import('./main')
 }
+

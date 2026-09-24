@@ -349,6 +349,7 @@ import {
 } from './pool-spawn-coordinator'
 import { createPoolStopper } from './pool-stop'
 import { poolTouchKeys } from './pool-touch-scope'
+import { portablePaths, portableSshBinary, portableSshOptions } from './portable'
 import { createPortalSession } from './portal-session'
 import { createKeepAwake } from './power-save'
 import { readPreUpdateBackupEnabled } from './pre-update-backup-config'
@@ -676,7 +677,7 @@ if (IS_WINDOWS) {
   // skip it (the installer already granted the ACE at install time). Repair
   // targets the install dir only: granting AppContainer read on userData would
   // expose Hermes sessions/config to every packaged app on the machine.
-  if (shouldAttemptAclRepair(priorMarker)) {
+  if (!portablePaths() && shouldAttemptAclRepair(priorMarker)) {
     const exeDir = path.dirname(process.execPath)
     const acl = grantAllApplicationPackagesAcl(exeDir, { execFileSync })
 
@@ -693,6 +694,12 @@ if (IS_WINDOWS) {
     marker: priorMarker,
     appVersion: app.getVersion()
   })
+
+  if (portablePaths() && sandboxDecision.enable) {
+    dialog.showErrorBox('Hermes Portable', 'Chromium sandbox initialization failed. Portable will not disable the sandbox. Move the folder to a supported local Windows filesystem and retry.')
+    app.exit(1)
+    throw new Error('Portable refuses an unsandboxed fallback')
+  }
 
   windowsSandboxFallbackActive = sandboxDecision.enable
   windowsSandboxFallbackSticky = sandboxDecision.nextMarker.state === 'fallback'
@@ -715,6 +722,7 @@ if (IS_WINDOWS) {
   // "GPU process isn't usable" FATAL abort ends the process with no recovery.
   app.on('child-process-gone', (_event, details) => {
     if (
+      portablePaths() ||
       !shouldRelaunchForGpuSandboxCrash({
         details,
         alreadyNoSandbox: windowsSandboxFallbackActive || alreadyHasNoSandbox(process.argv, process.env),
@@ -3083,7 +3091,7 @@ function resolveGitBinary() {
   }
 
   const localAppData = process.env.LOCALAPPDATA || ''
-  const candidates = []
+  const candidates = [path.join(HERMES_HOME, 'git', 'cmd', 'git.exe'), path.join(HERMES_HOME, 'git', 'bin', 'git.exe')]
 
   if (localAppData) {
     candidates.push(path.join(localAppData, 'hermes', 'git', 'cmd', 'git.exe'))
@@ -3342,6 +3350,10 @@ async function resolveHealedBranch(updateRoot, branch) {
 // inside applyUpdates. `force` (menu item, Settings "Check now") skips the
 // cache; the renderer's background poller never passes it.
 async function checkUpdates({ force = false }: { force?: boolean } = {}) {
+  if (portablePaths()) {
+    return { supported: false, reason: 'portable-manual-update', message: 'Community Portable build: download a tested ZIP from https://github.com/kongshan4219/hermes-desktop-portable/releases. Back up data before upgrading.', hermesRoot: HERMES_HOME, branch: '' }
+  }
+
   const updateRoot = resolveUpdateRoot()
   let { branch } = readDesktopUpdateConfig()
   const gitDir = path.join(updateRoot, '.git')
@@ -4187,6 +4199,10 @@ async function releaseBackendLock(updateRoot, tag) {
 // Detection (checkUpdates / commit changelog / "N behind") stays in the UI;
 // only this apply action changed.
 async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
+  if (portablePaths()) {
+    throw new Error('Portable program updates require a new ZIP. Close Hermes, back up data, and copy data into the new folder. https://github.com/kongshan4219/hermes-desktop-portable/releases')
+  }
+
   if (updateInFlight) {
     throw new Error('An update is already in progress.')
   }
@@ -4552,6 +4568,10 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
 }
 
 async function handOffWindowsBootstrapRecovery(reason) {
+  if (portablePaths()) {
+    return false
+  }
+
   if (!IS_WINDOWS || !IS_PACKAGED) {
     return false
   }
@@ -8895,6 +8915,10 @@ const _secretStoragePolicyIo = {
 let _secretStoragePolicy: SecretStoragePolicy | null = null
 
 function secretStoragePolicy(): SecretStoragePolicy {
+  if (portablePaths()) {
+    return { on: true, migrated: true }
+  }
+
   if (!_secretStoragePolicy) {
     _secretStoragePolicy = readSecretStoragePolicy(_secretStoragePolicyIo)
   }
@@ -9053,6 +9077,10 @@ function migrateLegacyEncryptedSecretsOnce() {
  * expected and acceptable.
  */
 function applySecretStorageEncryption(on: boolean) {
+  if (portablePaths() && !on) {
+    throw new Error('Portable requires Windows encryption for saved credentials. Encryption cannot be disabled.')
+  }
+
   const enable = on === true
 
   if (secretStoragePolicy().on === enable) {
@@ -9120,7 +9148,7 @@ function encryptDesktopSecret(value, options = {}) {
     return raw ? { encoding: 'plain', value: raw } : null
   }
 
-  return encryptDesktopSecretStrict(value, safeStorage, options)
+  return encryptDesktopSecretStrict(value, safeStorage, portablePaths() ? { allowPlainText: false } : options)
 }
 
 function decryptDesktopSecret(secret) {
@@ -9154,7 +9182,7 @@ function decryptDesktopSecret(secret) {
   // build) is returned verbatim on purpose: this fallback is what lets such a
   // config connect at all. Not a plaintext-writing path — nothing in this file
   // persists a token this way.
-  return value
+  return portablePaths() ? '' : value
 }
 
 function decryptRemoteHeaders(headers) {
@@ -9692,7 +9720,11 @@ async function saveRegistryConnection(input: any = {}) {
   // Token-auth remotes must actually have a token to be dialable. OAuth and
   // cloud entries authenticate via cookies/native tokens instead.
   if (entry.kind === 'remote' && entry.authMode !== 'oauth' && !decryptDesktopSecret(entry.token)) {
-    throw new Error('Remote gateway session token is required.')
+    throw new Error(
+      portablePaths()
+        ? 'Portable gateway credentials are unavailable. Sign in again or enter a new session token in Settings → Gateway. Saved connection settings are preserved.'
+        : 'Remote gateway session token is required.'
+    )
   }
 
   if (existing && connectionDialFieldsChanged(existing, entry)) {
@@ -9906,7 +9938,11 @@ async function sanitizeDesktopConnectionConfig(config = readDesktopConnectionCon
 // block when empty so plain remote connections stay unchanged.
 function buildRemoteBlock(remoteUrl, authMode, token, org?: string, headers?: object, name?: string) {
   if (authMode !== 'oauth' && !decryptDesktopSecret(token)) {
-    throw new Error('Remote gateway session token is required.')
+    throw new Error(
+      portablePaths()
+        ? 'Portable gateway credentials are unavailable. Sign in again or enter a new session token in Settings → Gateway. Saved connection settings are preserved.'
+        : 'Remote gateway session token is required.'
+    )
   }
 
   const block: { url: string; authMode: string; token: object; headers?: object; org?: string; name?: string } = {
@@ -9989,7 +10025,9 @@ function coerceDesktopConnectionConfig(input: any = {}, existing = readDesktopCo
   // plain-text storage, and that strictness is asserted in exactly one place.
   const nextToken = resolvePersistedRemoteToken({
     incomingToken,
-    persistToken,
+    // Portable also encrypts an in-memory connection-test envelope. This does
+    // not write configuration; it avoids admitting plaintext saved envelopes.
+    persistToken: persistToken || Boolean(portablePaths()),
     existingToken: existingBlock.token,
     allowPlainText: input.allowPlainTextToken,
     encryptSecret: encryptDesktopSecret
@@ -10127,6 +10165,10 @@ async function buildRemoteConnection(
   }
 
   if (!token) {
+    if (portablePaths()) {
+      throw new Error('Portable gateway credentials are unavailable. Sign in again or enter a new session token in Settings → Gateway. Saved connection settings are preserved.')
+    }
+
     throw new Error(
       'Remote Hermes gateway is selected, but no session token is saved. ' +
         'Open Settings → Gateway and save a token, or switch back to Local.'
@@ -10550,12 +10592,12 @@ async function reachablePreviewUrl(webContentsId: number, rawUrl: string): Promi
 }
 
 async function effectiveSshConfigFingerprint(sshConfig) {
-  const ssh =
-    process.platform === 'win32'
+  const ssh = portableSshBinary() ||
+    (process.platform === 'win32'
       ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH', 'ssh.exe')
-      : 'ssh'
+      : 'ssh')
 
-  const args = ['-G']
+  const args = ['-G', ...portableSshOptions()]
 
   if (sshConfig.port) {
     args.push('-p', String(sshConfig.port))
@@ -15375,6 +15417,7 @@ function createWindow() {
         // dead window. Gated on the exit code so unrelated crash loops don't
         // silently drop the sandbox.
         if (
+          portablePaths() ||
           !shouldRelaunchForRendererSandboxCrashLoop({
             reason: details?.reason,
             exitCode: details?.exitCode,
@@ -16041,13 +16084,13 @@ ipcMain.handle('hermes:ssh-config:resolve', async (_event, host) => {
     throw new Error('SSH host is required.')
   }
 
-  const ssh =
-    process.platform === 'win32'
+  const ssh = portableSshBinary() ||
+    (process.platform === 'win32'
       ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH', 'ssh.exe')
-      : 'ssh'
+      : 'ssh')
 
   return new Promise((resolve, reject) => {
-    const child = spawn(ssh, ['-G', '--', value], hiddenWindowsChildOptions({ stdio: ['ignore', 'pipe', 'pipe'] }))
+    const child = spawn(ssh, ['-G', ...portableSshOptions(), '--', value], hiddenWindowsChildOptions({ stdio: ['ignore', 'pipe', 'pipe'] }))
     let stdout = ''
     let stderr = ''
 
@@ -16072,7 +16115,10 @@ ipcMain.handle('hermes:ssh-config:resolve', async (_event, host) => {
       if (code !== 0) {
         reject(new Error(stderr.trim() || 'Could not resolve SSH host.'))
       } else {
-        resolve(parseSshGOutput(stdout))
+        // 'none' disables implicit host identities; it is not a key path.
+        const configOutput = portablePaths() ? stdout.replace(/^identityfile none\r?$/gim, '') : stdout
+
+        resolve(parseSshGOutput(configOutput))
       }
     })
   })
@@ -18498,6 +18544,10 @@ async function getUninstallSummary() {
 }
 
 async function runDesktopUninstall(mode) {
+  if (portablePaths()) {
+    return { ok: false, error: 'portable-manual-removal', message: 'Close Hermes and remove the Portable folder. Back up data first if you want to retain it.' }
+  }
+
   let uninstallArgs
 
   try {
@@ -18728,6 +18778,11 @@ ipcMain.handle('hermes:deep-link-ready', () => {
 })
 
 function registerDeepLinkProtocol() {
+  // Portable must not replace an installed copy in the Windows registry.
+  if (portablePaths()) {
+    return
+  }
+
   try {
     if (process.defaultApp && process.argv.length >= 2) {
       // Dev: register with the electron exec path + entry script so the OS can
@@ -19155,3 +19210,4 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
+

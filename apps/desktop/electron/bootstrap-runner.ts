@@ -6,7 +6,7 @@
  * the renderer.
  *
  * Wired from electron/main.ts:
- *   import { runBootstrap }from './bootstrap-runner'
+ *   import { runBootstrap } from './bootstrap-runner'
  *   const result = await runBootstrap({
  *     installStamp,        // INSTALL_STAMP from main.ts (may be null in dev)
  *     activeRoot,          // ACTIVE_HERMES_ROOT
@@ -42,6 +42,7 @@ import path from 'node:path'
 // with no tsconfig path resolution (see scripts/bundle-electron-main.mjs).
 import { stripAnsi } from '../../shared/src/ansi'
 
+import { portablePaths } from './portable'
 import { hiddenWindowsChildOptions } from './windows-child-options'
 
 const IS_WINDOWS = process.platform === 'win32'
@@ -330,6 +331,14 @@ async function resolveInstallScript({
   emit,
   _download = downloadInstallScript
 }) {
+  if (portablePaths()) {
+    const bundled = path.join(process.resourcesPath, 'portable', 'install.ps1')
+
+    await fsp.access(bundled, fs.constants.R_OK)
+
+    return { path: bundled, source: 'portable-bundle', kind: installScriptKind() }
+  }
+
   // 1. Dev shortcut: prefer a local checkout's installer so we can iterate
   //    without pushing. SOURCE_REPO_ROOT comes from main.ts (path.resolve
   //    of APP_ROOT/../..).
@@ -958,9 +967,11 @@ async function runBootstrap(opts) {
 
   try {
     const existingCheckout = hasExistingGitCheckout(activeRoot)
-    const pinCommit = !existingCheckout
+    // Portable runtime repair must not switch a detached candidate checkout
+    // back to the clone branch. The installer retains its no-rollback guard.
+    const pinCommit = !existingCheckout || Boolean(portablePaths())
 
-    if (existingCheckout && installStamp && installStamp.commit) {
+    if (existingCheckout && installStamp && installStamp.commit && !portablePaths()) {
       emit({
         type: 'log',
         line:
@@ -1092,3 +1103,4 @@ export {
   resolveMarkerPinnedCommit,
   runBootstrap
 }
+

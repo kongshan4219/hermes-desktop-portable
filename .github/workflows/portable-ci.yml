@@ -1,0 +1,19 @@
+name: Portable CI
+run-name: Portable candidate - ${{ github.event.pull_request.head.sha || github.sha }}
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: portable-ci-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    if: github.repository == 'kongshan4219/hermes-desktop-portable'
+    uses: ./.github/workflows/portable-build.yml
+    with:
+      source_sha: ${{ github.event.pull_request.head.sha || github.sha }}

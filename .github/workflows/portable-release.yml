@@ -1,0 +1,77 @@
+name: Portable draft release
+on:
+  workflow_dispatch:
+    inputs:
+      approved_sha:
+        description: Full reviewed commit SHA already merged into main
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: portable-draft-release
+  cancel-in-progress: false
+jobs:
+  approve-source:
+    if: github.repository == 'kongshan4219/hermes-desktop-portable' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify reviewed source and acceptance gate
+        env:
+          APPROVED_SHA: ${{ inputs.approved_sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          sha = os.environ['APPROVED_SHA']
+          assert re.fullmatch('[a-f0-9]{40}', sha), 'Full lowercase SHA required'
+          subprocess.run(['git', 'merge-base', '--is-ancestor', sha, 'HEAD'], check=True)
+          baseline = json.loads(subprocess.check_output(['git','show',sha+':docs/portable/upstream.json']))
+          assert baseline['releaseApproved'] is True, 'Portable acceptance is incomplete; release gate remains closed'
+          PY
+  validate:
+    needs: approve-source
+    permissions:
+      contents: read
+    uses: ./.github/workflows/portable-build.yml
+    with:
+      source_sha: ${{ inputs.approved_sha }}
+  draft:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '26'
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: portable-candidate-${{ github.run_id }}
+          path: portable-out
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: portable-evidence-${{ github.run_id }}
+          path: evidence
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: portable-credential-evidence-${{ github.run_id }}
+          path: credential-evidence
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: portable-local-runtime-evidence-${{ github.run_id }}
+          path: runtime-evidence
+      - run: node scripts/portable/release.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_SHA: ${{ inputs.approved_sha }}

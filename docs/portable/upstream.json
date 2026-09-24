@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "repository": "NousResearch/hermes-agent",
+  "adoptedTag": null,
+  "ref": "main",
+  "sha": "be59f0411e8fffa1e6f48425f7885c5c6badb705",
+  "desktopVersion": "0.17.6",
+  "portableRevision": 1,
+  "strategy": "bootstrap-snapshot-then-stable-release-descendants",
+  "releaseApproved": false
+}

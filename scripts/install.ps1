@@ -14,6 +14,8 @@
 
 param(
     [switch]$NoVenv,
+    # Set only by the Portable desktop process (or an explicit CLI request).
+    [switch]$Portable = ($env:HERMES_DESKTOP_PORTABLE -eq "1"),
     [switch]$SkipSetup,
     [switch]$SkipComputerUse,
     [string]$Branch = "main",
@@ -385,6 +387,10 @@ $script:ResolvedPathReport = @{
 
 $RepoUrlSsh = "git@github.com:NousResearch/hermes-agent.git"
 $RepoUrlHttps = "https://github.com/NousResearch/hermes-agent.git"
+if ($Portable) {
+    $RepoUrlHttps = "https://github.com/kongshan4219/hermes-desktop-portable.git"
+}
+$RepoArchiveBase = $RepoUrlHttps -replace "\.git$", ""
 $PythonVersion = "3.11"
 # Minor versions the installer accepts when the requested $PythonVersion isn't
 # available, in preference order. Only checkout-private uv-managed interpreters
@@ -852,6 +858,7 @@ function Install-Uv {
     try {
         $ErrorActionPreference = "Continue"
         $env:UV_INSTALL_DIR = Join-Path $HermesHome "bin"
+        if ($Portable) { $env:UV_NO_MODIFY_PATH = "1" }
         # Spawn via the resolved host exe (see Get-PowerShellHostExe) rather
         # than a bare `powershell`, which isn't guaranteed to be on PATH under
         # PowerShell 7 / pwsh-only setups.
@@ -964,7 +971,13 @@ function Install-Uv {
 # from the registry so every Invoke-Stage starts from a fresh, up-to-date
 # PATH view.  Cheap (registry reads, no I/O elsewhere) and idempotent.
 function Sync-EnvPath {
+    if ($Portable) {
+        $env:Path = "$HermesHome\node;$HermesHome\bin;$HermesHome\git\cmd;$HermesHome\git\bin;$env:Path"
+        return
+    }
+    if (-not $Portable) {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+    }
 }
 
 # npm lifecycle scripts on Windows spawn ``cmd.exe /d /s /c node <script>``.
@@ -1010,6 +1023,7 @@ function Set-ManagedNodeFirstOnUserPath {
     param([string]$NodeDir)
 
     if (-not $NodeDir) { return }
+    if ($Portable) { $env:Path = "$NodeDir;$env:Path"; return }
 
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
     $items = if ($userPath) { @($userPath -split ";") } else { @() }
@@ -1259,7 +1273,9 @@ function Resolve-UvCmd {
 
     # Refresh PATH from registry in case the current process started before
     # Install-Uv updated User PATH.
+    if (-not $Portable) {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+    }
     if (Get-Command uv -ErrorAction SilentlyContinue) {
         $script:UvCmd = "uv"
         return
@@ -1685,7 +1701,7 @@ function Install-Git {
                 $changed = $true
             }
         }
-        if ($changed) {
+        if ($changed -and -not $Portable) {
             [Environment]::SetEnvironmentVariable("Path", ($userPathItems -join ";"), "User")
         }
 
@@ -1762,7 +1778,9 @@ function Set-GitBashEnvVar {
 
     foreach ($candidate in $candidates) {
         if ($candidate -and (Test-Path $candidate)) {
-            [Environment]::SetEnvironmentVariable("HERMES_GIT_BASH_PATH", $candidate, "User")
+            if (-not $Portable) {
+                [Environment]::SetEnvironmentVariable("HERMES_GIT_BASH_PATH", $candidate, "User")
+            }
             $env:HERMES_GIT_BASH_PATH = $candidate
             $script:GitBashPath = $candidate
             Write-Info "Set HERMES_GIT_BASH_PATH=$candidate"
@@ -1988,7 +2006,7 @@ function Test-Node {
     # the taskbar -- looks like a hang to users on stock Windows).
     # Kept for environments where the portable download fails (proxy,
     # locked firewall, etc.) but the user is willing to consent to UAC.
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
+    if (-not $Portable -and (Get-Command winget -ErrorAction SilentlyContinue)) {
         Write-Info "Falling back to winget (may prompt UAC -- check your taskbar for a flashing icon)..."
         # Capture EAP outside the try block so the catch's restore call always
         # has a meaningful value (see Install-Uv for the full rationale).
@@ -2014,7 +2032,9 @@ function Test-Node {
             winget @wingetArgs 2>&1 | Out-Null
             $ErrorActionPreference = $prevEAP
             # Refresh PATH
-            $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+            if (-not $Portable) {
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+    }
             if (Test-SystemNodeReady) {
                 $script:HasNode = $true
                 return $true
@@ -2031,6 +2051,7 @@ function Test-Node {
 }
 
 function Update-ProcessPathForPackages {
+    if ($Portable) { return }
     # Make freshly-installed shims (rg.exe, ffmpeg.exe) visible to Get-Command in
     # THIS process without spawning a new shell, by folding the persisted
     # User+Machine hives plus winget's alias-shim directory into $env:Path.
@@ -2090,6 +2111,12 @@ function Install-SystemPackages {
     }
 
     if (-not $needRipgrep -and -not $needFfmpeg) { return }
+
+    if ($Portable) {
+        $script:_StageSkippedReason = "Optional ripgrep/ffmpeg are not bundled; Portable does not install system packages."
+        Write-Warn $script:_StageSkippedReason
+        return
+    }
 
     # Build description and package lists for each package manager
     $descParts = @()
@@ -2511,11 +2538,19 @@ function Install-Repository {
         $env:GIT_CONFIG_KEY_0 = "windows.appendAtomically"
         $env:GIT_CONFIG_VALUE_0 = "false"
         git config --global windows.appendAtomically false 2>$null
+        if ($Portable) {
+            # GIT_CONFIG_GLOBAL points inside this Portable's data/home. The
+            # official repository contains paths beyond MAX_PATH when the ZIP
+            # lives in a nested folder; do not change the Windows registry.
+            git config --global core.longpaths true
+            if ($LASTEXITCODE -ne 0) { throw "Could not enable long paths in Portable Git configuration" }
+        }
 
         # Try SSH first, then HTTPS, with -c flag for atomic write fix
         Write-Info "Trying SSH clone..."
         $env:GIT_SSH_COMMAND = "ssh -o BatchMode=yes -o ConnectTimeout=5"
         try {
+            if ($Portable) { throw "Portable uses HTTPS without importing SSH credentials." }
             Invoke-NativeWithRelaxedErrorAction { git -c windows.appendAtomically=false clone --depth 1 --branch $Branch $RepoUrlSsh $InstallDir }
             if ($LASTEXITCODE -eq 0) { $cloneSuccess = $true }
         } catch { }
@@ -2539,13 +2574,13 @@ function Install-Repository {
                 # for.  GitHub supports archive URLs for commits, tags, and
                 # branches; we honour Commit > Tag > Branch.
                 if ($Commit) {
-                    $zipUrl = "https://github.com/NousResearch/hermes-agent/archive/$Commit.zip"
+                    $zipUrl = "$RepoArchiveBase/archive/$Commit.zip"
                     $zipLabel = $Commit
                 } elseif ($Tag) {
-                    $zipUrl = "https://github.com/NousResearch/hermes-agent/archive/refs/tags/$Tag.zip"
+                    $zipUrl = "$RepoArchiveBase/archive/refs/tags/$Tag.zip"
                     $zipLabel = $Tag
                 } else {
-                    $zipUrl = "https://github.com/NousResearch/hermes-agent/archive/refs/heads/$Branch.zip"
+                    $zipUrl = "$RepoArchiveBase/archive/refs/heads/$Branch.zip"
                     $zipLabel = $Branch
                 }
                 $zipPath = "$env:TEMP\hermes-agent-$zipLabel.zip"
@@ -2568,7 +2603,15 @@ function Install-Repository {
                     # (#50823 / #61657). Fetch the requested ref and force-check
                     # it out (-f) so untracked ZIP files cannot block checkout.
                     Push-Location $InstallDir
-                    git -c windows.appendAtomically=false init 2>$null
+                    if ($Portable) {
+                        # Git's successful init can print default-branch hints
+                        # to stderr. PS 5.1 must judge the native exit status,
+                        # not turn informational stderr into a failed fallback.
+                        Invoke-NativeWithRelaxedErrorAction { git -c windows.appendAtomically=false init }
+                        if ($LASTEXITCODE -ne 0) { throw "Portable ZIP fallback git init failed (exit $LASTEXITCODE)" }
+                    } else {
+                        git -c windows.appendAtomically=false init 2>$null
+                    }
                     git -c windows.appendAtomically=false config windows.appendAtomically false 2>$null
                     # Pin autocrlf=false BEFORE the checkout below. Git for Windows
                     # defaults to core.autocrlf=true, which would renormalize the
@@ -3334,6 +3377,13 @@ function Set-PathVariable {
         Install-HermesCommandLaunchers -Root $InstallDir -Destination $hermesBin | Out-Null
     }
     
+    if ($Portable) {
+        $env:Path = "$hermesBin;$env:Path"
+        $env:HERMES_HOME = $HermesHome
+        Write-Success "Portable launchers ready; Windows user environment unchanged"
+        return
+    }
+
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
     # Migrate older layouts off the user PATH:
@@ -3640,8 +3690,20 @@ function Install-NodeDeps {
         [string]$logPath, [int]$timeoutSec
     ) {
         $cmdLine = "/d /s /c "" ""$exePath"" $argLine > ""$logPath"" 2>&1 """
-        $proc = Start-Process -FilePath $env:ComSpec -ArgumentList $cmdLine `
-            -WorkingDirectory $workDir -NoNewWindow -PassThru
+        if ($Portable) {
+            # Own the native process handle so PS 5.1 cannot report a null
+            # ExitCode for a completed managed npm invocation.
+            $proc = New-Object System.Diagnostics.Process
+            $proc.StartInfo.FileName = $env:ComSpec
+            $proc.StartInfo.Arguments = $cmdLine
+            $proc.StartInfo.WorkingDirectory = $workDir
+            $proc.StartInfo.UseShellExecute = $false
+            $proc.StartInfo.CreateNoWindow = $true
+            [void]$proc.Start()
+        } else {
+            $proc = Start-Process -FilePath $env:ComSpec -ArgumentList $cmdLine `
+                -WorkingDirectory $workDir -NoNewWindow -PassThru
+        }
         $deadline = [DateTime]::UtcNow.AddSeconds($timeoutSec)
         $shown = 0
         function _Drain-NewLines([string]$path, [ref]$count) {
@@ -3662,6 +3724,7 @@ function Install-NodeDeps {
             _Drain-NewLines $logPath ([ref]$shown)
         }
         _Drain-NewLines $logPath ([ref]$shown)
+        if ($Portable) { $proc.WaitForExit() }
         return $proc.ExitCode
     }
 
@@ -3895,6 +3958,8 @@ function Install-BrowserUseCli {
 function Test-CuaDriverRuntimeContract {
     param([Parameter(Mandatory = $true)][string]$DriverPath)
 
+    $previousCuaEAP = $ErrorActionPreference
+    if ($Portable) { $ErrorActionPreference = "Continue" }
     try {
         $versionOutput = (& $DriverPath --version 2>$null | Out-String).Trim()
         if ($LASTEXITCODE -ne 0) {
@@ -3939,7 +4004,10 @@ function Test-CuaDriverRuntimeContract {
         }
         return $true
     } catch {
+        if ($Portable) { Write-Warn "Private Cua probe error: $($_.Exception.Message)" }
         return $false
+    } finally {
+        $ErrorActionPreference = $previousCuaEAP
     }
 }
 
@@ -3952,6 +4020,40 @@ function Test-CuaDriverRuntimeContract {
 function Install-CuaDriver {
     if ($SkipComputerUse) {
         Write-Info "Skipping Computer Use (cua-driver) install (-SkipComputerUse)"
+        return
+    }
+    if ($Portable) {
+        # The upstream Cua installer modifies User PATH, scheduled tasks and
+        # other Cua processes even with some opt-outs. Use its exact official
+        # release archive directly; never run that system integration script.
+        $driverDir = Join-Path $HermesHome "cua\bin"
+        $driver = Join-Path $driverDir "cua-driver.exe"
+        if ((Test-Path $driver) -and (Test-CuaDriverRuntimeContract -DriverPath $driver)) {
+            Write-Success "Private Computer Use driver already installed and compatible"
+            return
+        }
+        $archive = Join-Path $env:TEMP "portable-cua-0.28.2.zip"
+        $stage = Join-Path $env:TEMP ("portable-cua-" + [Guid]::NewGuid().ToString("N"))
+        try {
+            $url = "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.28.2/cua-driver-rs-0.28.2-windows-x86_64.zip"
+            Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing -TimeoutSec 120
+            $expected = "3c1fcf10ff9513b94e4af78ad6a216ab62aa95b2c9a3b70dfbdba9f04e021533"
+            if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
+                throw "Private Cua archive SHA256 mismatch"
+            }
+            Expand-Archive -LiteralPath $archive -DestinationPath $stage
+            $binary = Get-ChildItem -LiteralPath $stage -Recurse -Filter "cua-driver.exe" | Select-Object -First 1
+            if (-not $binary) { throw "Private Cua archive contains no driver" }
+            New-Item -ItemType Directory -Path $driverDir -Force | Out-Null
+            Get-ChildItem -LiteralPath $binary.Directory.FullName | Copy-Item -Destination $driverDir -Recurse -Force
+            if (-not (Test-CuaDriverRuntimeContract -DriverPath $driver)) {
+                throw "Private Cua driver failed the upstream runtime contract"
+            }
+            Write-Success "Private Computer Use driver 0.28.2 installed; User PATH and autostart unchanged"
+        } finally {
+            Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+        }
         return
     }
     $existingCuaDriver = Get-Command cua-driver -ErrorAction SilentlyContinue

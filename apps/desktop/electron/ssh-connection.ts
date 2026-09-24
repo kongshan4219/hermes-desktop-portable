@@ -36,6 +36,8 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 
+import { portableSshBinary, portableSshOptions } from './portable'
+
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000
 const DEFAULT_EXEC_TIMEOUT_MS = 20_000
 const DEFAULT_FORWARD_TIMEOUT_MS = 15_000
@@ -226,6 +228,7 @@ function baseSshOptions(controlPath, connectTimeoutMs?) {
     : []
 
   return [
+    ...portableSshOptions(),
     ...mux,
     '-o',
     'BatchMode=yes',
@@ -459,7 +462,7 @@ function runSsh(args, { timeoutMs, spawnFn = spawn, stdin = 'ignore', stdinData,
     let child
 
     try {
-      child = spawnFn('ssh', args, { stdio: [useStdinPipe ? 'pipe' : 'ignore', 'pipe', 'pipe'] })
+      child = spawnFn(portableSshBinary() || 'ssh', args, { stdio: [useStdinPipe ? 'pipe' : 'ignore', 'pipe', 'pipe'] })
     } catch (error) {
       reject(error)
 
@@ -858,7 +861,7 @@ class SshConnection {
   // cascaded into SIGTERM of a healthy backend (#96266).
   _startNoMuxTunnelChild(tunnel: any, spec: string, args: string[], localPort: number | string) {
     return new Promise<void>((resolve, reject) => {
-      const child = this._spawnFn('ssh', args, { stdio: ['ignore', 'ignore', 'pipe'] })
+      const child = this._spawnFn(portableSshBinary() || 'ssh', args, { stdio: ['ignore', 'ignore', 'pipe'] })
       tunnel.child = child
       let stderr = ''
       let readyConfirmed = false
@@ -1189,3 +1192,4 @@ export {
   validateSshTarget,
   withRemoteTimeout
 }
+
