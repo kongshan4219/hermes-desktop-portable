@@ -133,6 +133,7 @@ export function initializePortable(app: App): PortablePaths | null {
   }
 
   const windows = process.env.SystemRoot || 'C:\\Windows'
+
   const managedPath = [
     path.join(p.hermes, 'node'),
     path.join(p.hermes, 'bin'),

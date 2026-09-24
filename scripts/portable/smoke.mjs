@@ -139,13 +139,15 @@ try {
     try { await window.hermesDesktop.setSecretStorageEncryption(false); return '' } catch (e) { return String(e) }
   })
   assert.match(refusal, /Portable requires/)
-  const configBeforeTest = snapshot(path.join(root, 'data', 'desktop'))['connection.json']
+  const connectionFile = path.join(root, 'data', 'desktop', 'connection.json')
+  const savedConnectionBytes = () => fs.existsSync(connectionFile) ? fs.readFileSync(connectionFile, 'utf8') : null
+  const configBeforeTest = savedConnectionBytes()
   received.length = 0
   await current.page.evaluate(async ({ remoteUrl, token }) => {
     try { await window.hermesDesktop.testConnectionConfig({ mode: 'remote', remoteAuthMode: 'token', remoteUrl, remoteToken: token }) } catch { /* HTTP mock refuses WS */ }
   }, { remoteUrl, token })
   assert.ok(received.includes(token), 'A newly entered token must reach the gateway before it is saved')
-  assert.equal(snapshot(path.join(root, 'data', 'desktop'))['connection.json'], configBeforeTest)
+  assert.equal(savedConnectionBytes(), configBeforeTest)
   mark('new in-memory credential can be tested without persisting the connection')
   const saved = await current.page.evaluate(async ({ remoteUrl, token }) => window.hermesDesktop.saveConnectionConfig({
     mode: 'remote', remoteAuthMode: 'token', remoteToken: token, remoteUrl

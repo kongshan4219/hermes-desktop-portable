@@ -7,6 +7,23 @@ import http from 'node:http'
 import path from 'node:path'
 import { _electron as electron } from 'playwright'
 
+// Same readiness condition as the upstream E2E fixture: the composer can be
+// mounted while a full-window boot or onboarding overlay still owns input.
+export async function waitReady(page) {
+  await page.waitForFunction(() => {
+    let node = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2)
+    if (!node) return false
+    while (node) {
+      if (getComputedStyle(node).position === 'fixed') {
+        const r = node.getBoundingClientRect()
+        if (r.left <= 0 && r.top <= 0 && r.right >= innerWidth && r.bottom >= innerHeight) return false
+      }
+      node = node.parentElement
+    }
+    return true
+  }, undefined, { timeout: 120000 })
+}
+
 export async function verifyRemote({ zip, scratch, backend, out, setImageUrl, reply }) {
   const destination = path.join(scratch, '远程 第二份 (remote)')
   const shell = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
@@ -69,6 +86,7 @@ export async function verifyRemote({ zip, scratch, backend, out, setImageUrl, re
     await page.waitForFunction(() => Boolean(window.hermesDesktop?.getConnectionConfig))
   }
   async function send(text, answer) {
+    await waitReady(page)
     const composer = page.locator('textarea:visible, [contenteditable="true"]:visible').first()
     await composer.fill(text, { timeout: 120000 })
     await composer.press('Enter')

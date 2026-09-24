@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron } from 'playwright'
 import { startMockServer, MOCK_REPLY } from '../../tests-js/scripts/mock-server.ts'
-import { verifyRemote } from './remote-runtime.mjs'
+import { verifyRemote, waitReady } from './remote-runtime.mjs'
 
 assert.equal(process.platform, 'win32')
 const out = path.resolve('portable-out')
@@ -42,11 +42,12 @@ const hostPaths = [
   path.join(process.env.LOCALAPPDATA, 'uv'), path.join(process.env.LOCALAPPDATA, 'ms-playwright'),
   path.join(process.env.LOCALAPPDATA, 'npm-cache')
 ]
-function snapshot(dir) {
+function snapshot(dir, programOnly = false) {
   const result = {}
   function walk(p) {
     if (!fs.existsSync(p)) return
     for (const e of fs.readdirSync(p, { withFileTypes: true })) {
+      if (programOnly && p === dir && e.name === 'data') continue
       const q = path.join(p, e.name)
       if (e.isDirectory()) walk(q)
       else if (e.isFile()) result[path.relative(dir, q)] = crypto.createHash('sha256').update(fs.readFileSync(q)).digest('hex')
@@ -55,7 +56,8 @@ function snapshot(dir) {
   walk(dir)
   return result
 }
-const hostBefore = hostPaths.map(snapshot)
+const hostBefore = hostPaths.map(dir => snapshot(dir))
+const programBefore = snapshot(root, true)
 const home = path.join(root, 'data', 'hermes')
 fs.mkdirSync(home, { recursive: true })
 const config = `model:\n  default: mock-model\n  provider: mock\nproviders:\n  mock:\n    api: ${mock.url}/v1\n    name: Mock\n    api_mode: chat_completions\n    key_env: MOCK_API_KEY\n    models:\n      mock-model: {}\n    context_length: 64000\nauxiliary:\n  title_generation:\n    enabled: false\n`
@@ -98,6 +100,7 @@ async function launchAndBootstrap() {
   return current
 }
 async function sendAndSee(pair, text, reply) {
+  await waitReady(pair.page)
   const composer = pair.page.locator('textarea:visible, [contenteditable="true"]:visible').first()
   await composer.fill(text, { timeout: 120000 })
   await composer.press('Enter')
@@ -128,7 +131,8 @@ try {
   assert.equal(registry(), registryBefore)
   assert.equal(crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex'), hash)
   for (let i = 0; i < hostPaths.length; i++) assert.deepEqual(snapshot(hostPaths[i]), hostBefore[i], `Host runtime profile changed: ${hostPaths[i]}`)
-  mark('fresh and moved local runtime leave targeted host profiles and caches unchanged')
+  assert.deepEqual(snapshot(root, true), programBefore, 'Managed persistence must not modify the program files outside data')
+  mark('fresh and moved local runtime leave program files, targeted host profiles and caches unchanged')
   report.status = 'passed'
 } catch (error) {
   await current?.page.screenshot({ path: path.join(out, 'local-runtime-failure.png') }).catch(() => {})
