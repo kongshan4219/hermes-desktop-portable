@@ -189,6 +189,7 @@ jobs:
           name: portable-local-runtime-evidence-${{ github.run_id }}
           path: |
             portable-out/local-runtime-report.json
-            portable-out/local-runtime-window.png
+            portable-out/local-runtime-*.png
+            portable-out/remote-runtime-*.png
           if-no-files-found: warn
           retention-days: 14

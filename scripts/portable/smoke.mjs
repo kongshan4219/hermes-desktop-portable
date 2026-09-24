@@ -30,8 +30,8 @@ const checked = name => report.checks.some(c => c.name === name)
 
 function extract(name) {
   const dest = path.join(scratch, name)
-  execFileSync(shell, ['-NoProfile', '-Command', 'Expand-Archive -LiteralPath $env:PORTABLE_TEST_ZIP -DestinationPath $env:PORTABLE_TEST_DEST'], {
-    env: { ...process.env, PORTABLE_TEST_ZIP: zip, PORTABLE_TEST_DEST: dest }, timeout: 120000
+  execFileSync(shell, ['-NoProfile', '-Command', 'Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory($env:PORTABLE_TEST_ZIP, $env:PORTABLE_TEST_DEST)'], {
+    env: { ...process.env, PORTABLE_TEST_ZIP: zip, PORTABLE_TEST_DEST: dest }, timeout: 300000
   })
   return fs.realpathSync(path.join(dest, 'Hermes-Portable'))
 }
@@ -130,6 +130,7 @@ try {
   assert.equal(resolved.hostname, '127.0.0.1')
   assert.equal(resolved.port, 2222)
   assert.equal(resolved.user, 'portable-ci')
+  assert.equal(resolved.identityFile, null)
   mark('bundled SSH resolves private config through actual Desktop IPC under reduced PATH')
 
   mark('actual Electron paths, hostile environment precedence, child process, reduced PATH, Unicode path and unrelated cwd')
@@ -145,6 +146,18 @@ try {
   fs.mkdirSync(path.join(out, 'cross-machine'), { recursive: true })
   fs.copyFileSync(path.join(root, 'data', 'desktop', 'connection.json'), path.join(out, 'cross-machine', 'connection.json'))
   await current.page.evaluate(() => localStorage.setItem('portable-ci-sentinel', 'preserved'))
+  await current.page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('portable-ci', 1)
+    request.onupgradeneeded = () => request.result.createObjectStore('state')
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const db = request.result
+      const tx = db.transaction('state', 'readwrite')
+      tx.objectStore('state').put('preserved', 'sentinel')
+      tx.oncomplete = () => { db.close(); resolve() }
+      tx.onerror = () => reject(tx.error)
+    }
+  }))
   await current.app.evaluate(async ({ session }) => {
     await session.defaultSession.cookies.set({ url: 'https://portable.invalid', name: 'portable', value: 'preserved', expirationDate: Date.now() / 1000 + 86400 })
   })
@@ -169,19 +182,33 @@ try {
   mark('flag absent preserves upstream overrides/policy and simultaneous installed/Portable instances remain separate')
 
   await stop(current); current = null
-  const target = path.join(scratch, '移動 日本 (moved)')
-  fs.renameSync(root, target)
+  // Hosted Windows uses a separate workspace volume; test a real drive move.
+  const destinationParent = fs.mkdtempSync(path.join(process.cwd(), 'portable-cross-drive-'))
+  const target = path.join(destinationParent, '移動 日本 (moved)')
+  assert.notEqual(path.parse(root).root.toLowerCase(), path.parse(target).root.toLowerCase())
+  fs.cpSync(root, target, { recursive: true })
+  fs.rmSync(root, { recursive: true, force: true })
   const moved = fs.realpathSync(target)
   current = await launch(moved)
   assert.equal(await current.page.evaluate(() => localStorage.getItem('portable-ci-sentinel')), 'preserved')
   assert.equal(await current.app.evaluate(async ({ session }) => (await session.defaultSession.cookies.get({ url: 'https://portable.invalid' }))[0]?.value), 'preserved')
+  assert.equal(await current.page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('portable-ci', 1)
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const db = request.result
+      const get = db.transaction('state').objectStore('state').get('sentinel')
+      get.onsuccess = () => { db.close(); resolve(get.result) }
+      get.onerror = () => reject(get.error)
+    }
+  })), 'preserved')
   received.length = 0
   await current.page.evaluate(async url => {
     try { await window.hermesDesktop.testConnectionConfig({ mode: 'remote', remoteUrl: url }) } catch { /* mock refuses WS; assert header below */ }
   }, remoteUrl)
   assert.ok(received.includes(token), 'Moved application must decrypt and send its previously saved token')
   assert.equal(fs.existsSync(root), false)
-  mark('same-machine directory move preserves localStorage, cookies and usable encrypted credential')
+  mark('same-machine cross-drive move preserves IndexedDB, localStorage, cookies and usable encrypted credential')
   await stop(current); current = null
 
   const needle = [Buffer.from(token), Buffer.from(Buffer.from(token).toString('base64'))]

@@ -15,7 +15,7 @@ const sums = fs.readFileSync(path.join(out, 'SHA256SUMS.txt'), 'utf8').split(/\s
 assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(out, zip))).digest('hex'), sums[0])
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'portable-foreign-'))
 const shell = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-execFileSync(shell, ['-NoProfile', '-Command', 'Expand-Archive -LiteralPath $env:PORTABLE_TEST_ZIP -DestinationPath $env:PORTABLE_TEST_DEST'], {
+execFileSync(shell, ['-NoProfile', '-Command', 'Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory($env:PORTABLE_TEST_ZIP, $env:PORTABLE_TEST_DEST)'], {
   env: { ...process.env, PORTABLE_TEST_ZIP: path.join(out, zip), PORTABLE_TEST_DEST: scratch }
 })
 const root = path.join(scratch, 'Hermes-Portable')

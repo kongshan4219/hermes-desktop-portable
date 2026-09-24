@@ -14,7 +14,8 @@ const metadata = JSON.parse(fs.readFileSync(path.join(out, 'portable-build.json'
 assert.equal(metadata.forkCommit, sha)
 const smoke = JSON.parse(fs.readFileSync('evidence/portable-out/smoke-report.json', 'utf8'))
 const foreign = JSON.parse(fs.readFileSync('credential-evidence/cross-machine-report.json', 'utf8'))
-for (const report of [smoke, foreign]) {
+const runtime = JSON.parse(fs.readFileSync('runtime-evidence/local-runtime-report.json', 'utf8'))
+for (const report of [smoke, foreign, runtime]) {
   assert.equal(report.source, sha)
   assert.equal(report.status, 'passed')
 }
@@ -25,6 +26,7 @@ const hash = crypto.createHash('sha256').update(fs.readFileSync(path.join(out, z
 assert.equal(hash, sums[0])
 assert.equal(hash, smoke.zipSha256)
 assert.equal(hash, foreign.zipSha256)
+assert.equal(hash, runtime.zipSha256)
 const tag = `desktop-${metadata.desktopVersion}-portable.${metadata.portableRevision}-${sha.slice(0, 12)}`
 const token = process.env.GH_TOKEN
 async function api(route, method = 'GET', body) {

@@ -16101,7 +16101,10 @@ ipcMain.handle('hermes:ssh-config:resolve', async (_event, host) => {
       if (code !== 0) {
         reject(new Error(stderr.trim() || 'Could not resolve SSH host.'))
       } else {
-        resolve(parseSshGOutput(stdout))
+        // 'none' disables implicit host identities; it is not a key path.
+        const configOutput = portablePaths() ? stdout.replace(/^identityfile none\r?$/gim, '') : stdout
+
+        resolve(parseSshGOutput(configOutput))
       }
     })
   })

@@ -67,6 +67,10 @@ jobs:
         with:
           name: portable-credential-evidence-${{ github.run_id }}
           path: credential-evidence
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: portable-local-runtime-evidence-${{ github.run_id }}
+          path: runtime-evidence
       - run: node scripts/portable/release.mjs
         env:
           GH_TOKEN: ${{ github.token }}

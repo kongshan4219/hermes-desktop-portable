@@ -13,6 +13,7 @@
 | Portable 新增路径/搬迁单元测试 | 上述 run 中通过；仅为单元证据 |
 | 完整平台套件迁至普通 Linux runner | 已通过：commit `5e159e0765acc4504e609ac7449be0a0910b429f`，run [35985127566](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35985127566)，2388 passed / 2 skipped；GUI 保持 Chromium sandbox |
 | 最终 ZIP 的真实 exe smoke | 上述 run 构建/打包成功；smoke 在中文路径子进程环境断言失败（测试按 UTF-8 解码 cmd 输出）；下一提交修正为 cmd /u + UTF-16LE 并重新验证 |
+| 随包 Git/OpenSSH 首轮 | commit `7901ea456390fbe3b772ea63bcba34991ff1ad0a`，run [35986064975](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35986064975) 构建成功；测试在 PowerShell Expand-Archive 超时，未到达应用启动。改用系统 ZIP API 后重跑 |
 | 独立 Windows job 凭据失效/重新认证 | 待运行，以 cross-machine-report.json 为准 |
 
 ## 可执行测试
@@ -22,6 +23,8 @@
 `scripts/portable/cross-machine.mjs` 在不同 hosted Windows job 中读取第一台机器产生的**合成**令牌密文，要求连接 URL 保留、旧令牌无法使用、提示重新认证、新令牌加密保存。只传测试 fixture；它不进入发行 ZIP 或 Release 资产。
 
 Windows 回归选择 Portable、Windows 专属、bootstrap、backend env、native-token-store、secret-storage-policy；完整 upstream Electron 平台套件仍在 Linux 运行。上游 GUI 套件中既有 skip 必须保留并单独报告，不能计入通过数。
+
+`scripts/portable/local-runtime.mjs` 已接入真实首次 bootstrap 与迁移重建测试；`remote-runtime.mjs` 使用第二份最终 ZIP 连接前者的真实 backend 和官方 mock 模型，测试 HTTP/WS 认证、失败凭据、聊天、工具结果、图片、重连与冷启动持久化。脚本存在不表示已通过；以匹配 ZIP 的 local-runtime-report.json 为准。
 
 ## 尚未完成的关键验收
 
