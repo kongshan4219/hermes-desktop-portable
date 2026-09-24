@@ -43,7 +43,7 @@ jobs:
           New-Item -ItemType Directory -Force build-evidence | Out-Null
           [ordered]@{
             source_sha = $actual
-            upstream_sha = 'be59f0411e8fffa1e6f48425f7885c5c6badb705'
+            upstream_sha = (Get-Content docs/portable/upstream.json -Raw | ConvertFrom-Json).sha
             runner_os = $env:RUNNER_OS
             runner_arch = $env:RUNNER_ARCH
             image_os = $env:ImageOS
@@ -147,13 +147,48 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y zsh xvfb libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libdrm2 libgbm1 libasound2t64
+      - name: Provision the Electron Linux sandbox helper
+        run: |
+          sandbox_helper=$(node -e "const p=require('node:path'); process.stdout.write(p.join(p.dirname(require.resolve('electron/package.json',{paths:['apps/desktop']})),'dist','chrome-sandbox'))")
+          sudo chown root:root "$sandbox_helper"
+          sudo chmod 4755 "$sandbox_helper"
       - name: Complete upstream Electron platform suite on POSIX
         working-directory: apps/desktop
-        run: xvfb-run -a npx vitest run --project electron --reporter=default --reporter=json --outputFile=../../platform-tests.json
+        run: npx vitest run --project electron --reporter=default --reporter=json --outputFile=../../platform-tests.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: portable-platform-evidence-${{ github.run_id }}
           path: platform-tests.json
+          if-no-files-found: warn
+          retention-days: 14
+  local-runtime:
+    needs: windows
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '26'
+          cache: npm
+      - run: npm install --global npm@12
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: portable-candidate-${{ github.run_id }}
+          path: portable-out
+      - name: Fresh local install and moved runtime reconstruction
+        run: node scripts/portable/local-runtime.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: portable-local-runtime-evidence-${{ github.run_id }}
+          path: |
+            portable-out/local-runtime-report.json
+            portable-out/local-runtime-window.png
           if-no-files-found: warn
           retention-days: 14

@@ -15,7 +15,11 @@ async function api(route, method = 'GET', body) {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
     ...(body ? { body: JSON.stringify(body) } : {})
   })
-  if (!r.ok) throw new Error(`GitHub ${method} ${route}: HTTP ${r.status}`)
+  if (!r.ok) {
+    const error = new Error(`GitHub ${method} ${route}: HTTP ${r.status}`)
+    error.status = r.status
+    throw error
+  }
   return r.status === 204 ? null : r.json()
 }
 const git = (...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', ...args], { encoding: 'utf8', timeout: 120000 }).trim()
@@ -49,6 +53,24 @@ if (open) {
   fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Revalidating existing candidate ${open.head.sha}: ${open.html_url}\n`)
   process.exit(0)
 }
+// Recover an interrupted push-before-PR without generating a new commit or
+// force-pushing the existing candidate.
+let existingBranch
+try { existingBranch = await api(`/repos/${repository}/git/ref/heads/${branch}`) }
+catch (error) { if (error.status !== 404) throw error }
+if (existingBranch) {
+  const candidate = existingBranch.object.sha
+  git('fetch', 'origin', `refs/heads/${branch}`)
+  const recorded = JSON.parse(git('show', `${candidate}:docs/portable/upstream.json`))
+  assert.equal(recorded.sha, upstream, 'Existing sync branch has different provenance')
+  assert.ok(ancestor(upstream, candidate), 'Candidate must include the upstream commit')
+  const pr = await api(`/repos/${repository}/pulls`, 'POST', {
+    title: `Portable: sync stable ${tag}`, head: branch, base: 'main', draft: true,
+    body: `${marker}\nRecovered an existing candidate after an interrupted automation run.\nUpstream ${tag}: ${upstream}\nCandidate: ${candidate}\nValidation: ${run}\nReview Desktop paths, credentials, installer and updater changes. No public release is approved.`
+  })
+  fs.appendFileSync(process.env.GITHUB_OUTPUT, `source_sha=${candidate}\npr_number=${pr.number}\n`)
+  process.exit(0)
+}
 git('config', 'user.name', 'github-actions[bot]')
 git('config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
 git('switch', '-c', branch)
@@ -57,8 +79,9 @@ if (merge.status !== 0) {
   const conflicts = git('diff', '--name-only', '--diff-filter=U')
   spawnSync('git', ['merge', '--abort'])
   const body = `${marker}\nStable upstream: ${tag}\nSHA: ${upstream}\nRun: ${run}\n\nMerge stopped. No candidate was pushed.\n\nConflicting files:\n\n\`\`\`text\n${conflicts || '(merge failed before a conflict list was available)'}\n\`\`\`\n\nResolve on a new branch without an ours/theirs blanket replacement, then run Portable CI for that exact commit.`
-  const issues = await api(`/repos/${repository}/issues?state=all&per_page=100`)
-  const issue = issues.find(i => !i.pull_request && i.body?.includes(marker))
+  const query = encodeURIComponent(`repo:${repository} is:issue ${upstream} in:body`)
+  const issues = await api(`/search/issues?q=${query}&per_page=100`)
+  const issue = issues.items.find(i => i.body?.includes(marker))
   if (issue) await api(`/repos/${repository}/issues/${issue.number}`, 'PATCH', { body, state: 'open' })
   else await api(`/repos/${repository}/issues`, 'POST', { title: `Portable upstream sync blocked: ${tag}`, body })
   throw new Error('Upstream merge conflict recorded in tracking issue')

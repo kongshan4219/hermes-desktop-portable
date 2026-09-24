@@ -33,7 +33,7 @@ function extract(name) {
   execFileSync(shell, ['-NoProfile', '-Command', 'Expand-Archive -LiteralPath $env:PORTABLE_TEST_ZIP -DestinationPath $env:PORTABLE_TEST_DEST'], {
     env: { ...process.env, PORTABLE_TEST_ZIP: zip, PORTABLE_TEST_DEST: dest }, timeout: 120000
   })
-  return path.join(dest, 'Hermes-Portable')
+  return fs.realpathSync(path.join(dest, 'Hermes-Portable'))
 }
 function snapshot(dir) {
   const result = {}
@@ -75,7 +75,7 @@ async function launch(root, extra = {}) {
 }
 async function inspect(app) {
   return app.evaluate(({ app, session, safeStorage }) => {
-    const child = require('node:child_process').execFileSync(process.env.ComSpec, ['/d', '/c', 'set'], { encoding: 'utf8' })
+    const child = process.getBuiltinModule('child_process').execFileSync(process.env.ComSpec, ['/d', '/c', 'set'], { encoding: 'utf8' })
     return {
       paths: Object.fromEntries(['home', 'userData', 'sessionData', 'temp', 'logs', 'crashDumps'].map(k => [k, app.getPath(k)])),
       storage: session.defaultSession.getStoragePath(),
@@ -160,8 +160,9 @@ try {
   mark('flag absent preserves upstream overrides/policy and simultaneous installed/Portable instances remain separate')
 
   await stop(current); current = null
-  const moved = path.join(scratch, '移動 日本 (moved)')
-  fs.renameSync(root, moved)
+  const target = path.join(scratch, '移動 日本 (moved)')
+  fs.renameSync(root, target)
+  const moved = fs.realpathSync(target)
   current = await launch(moved)
   assert.equal(await current.page.evaluate(() => localStorage.getItem('portable-ci-sentinel')), 'preserved')
   assert.equal(await current.app.evaluate(async ({ session }) => (await session.defaultSession.cookies.get({ url: 'https://portable.invalid' }))[0]?.value), 'preserved')
@@ -213,6 +214,7 @@ try {
   assert.equal(digest(), pkg.sha256)
   mark('tested ZIP unchanged and contains no test-generated data')
 } catch (error) {
+  await current?.page.screenshot({ path: path.join(out, 'portable-failure.png') }).catch(() => {})
   report.failure = String(error.stack || error)
   throw error
 } finally {

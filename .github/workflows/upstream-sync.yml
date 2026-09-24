@@ -41,3 +41,30 @@ jobs:
     uses: ./.github/workflows/portable-build.yml
     with:
       source_sha: ${{ needs.propose.outputs.source_sha }}
+  record-validation:
+    needs: [propose, validate-candidate]
+    if: always() && needs.propose.outputs.source_sha != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - name: Attach actual result to the candidate SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ needs.propose.outputs.source_sha }}
+          VALIDATION_RESULT: ${{ needs.validate-candidate.result }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.request
+          sha = os.environ['CANDIDATE_SHA']
+          assert re.fullmatch('[a-f0-9]{40}', sha)
+          repo = os.environ['GITHUB_REPOSITORY']
+          body = {'state': 'success' if os.environ['VALIDATION_RESULT'] == 'success' else 'failure',
+                  'context': 'portable/candidate', 'description': 'Exact candidate SHA reusable validation',
+                  'target_url': f"https://github.com/{repo}/actions/runs/{os.environ['GITHUB_RUN_ID']}"}
+          request = urllib.request.Request(f'https://api.github.com/repos/{repo}/statuses/{sha}',
+              data=json.dumps(body).encode(), method='POST',
+              headers={'Authorization': 'Bearer '+os.environ['GH_TOKEN'], 'Content-Type': 'application/json'})
+          urllib.request.urlopen(request, timeout=30).close()
+          PY

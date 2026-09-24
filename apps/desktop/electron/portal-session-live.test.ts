@@ -44,19 +44,16 @@ test.skipIf(displayPrefix === null)(
       })
       const env: NodeJS.ProcessEnv = {}
 
-      for (const name of ['PATH', 'SystemRoot', 'WINDIR', 'DISPLAY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR']) {
+      for (const name of ['PATH', 'SystemRoot', 'WINDIR', 'DISPLAY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR', 'XAUTHORITY']) {
         if (process.env[name]) {
           env[name] = process.env[name]
         }
       }
 
       const electron: string = createRequire(import.meta.url)('electron')
-      // Chromium switches go after the fixture's positional root so
-      // `process.argv[2]` in the fixture stays the root. `--no-sandbox` matches
-      // the Playwright fixture: the npm-installed chrome-sandbox helper is not
-      // setuid and Ubuntu 24.04 runners restrict unprivileged user namespaces,
-      // so a sandboxed launch aborts before the main script runs.
-      const [command, ...args] = [...(displayPrefix ?? []), electron, bundle, root, '--no-sandbox', '--disable-gpu']
+      // Keep Chromium sandboxing enabled. Linux CI provisions Electron's
+      // setuid helper; propagate XAUTHORITY when using an existing X server.
+      const [command, ...args] = [...(displayPrefix ?? []), electron, bundle, root, '--disable-gpu']
 
       let stdout = ''
 
