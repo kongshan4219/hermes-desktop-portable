@@ -52,3 +52,7 @@ Windows 回归选择 Portable、Windows 专属、bootstrap、backend env、nativ
 ## ac217cca 的补充结果
 
 [run 35994510437](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35994510437) 的 Desktop ZIP smoke、平台套件和跨机器凭据继续通过；本地安装停在 Cua runtime contract。TUI native exit code 修复已验证，Browser npm 仍有超时。当前把 PS 5.1 原生 Cua 检查前移到完整打包前，保留实际 version/manifest 输出；关键断言及发布门禁未放松。
+
+## 4610dc2f 的补充结果
+
+[run 36000313369](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/36000313369) 的 Windows 136 passed / 1 skipped、最终 ZIP smoke 和 Linux 2388 passed / 2 skipped 通过。父进程的私有 Python 配置已验证。完整运行时解释器来源检查需将 Windows 8.3/长路径统一为文件系统实际路径；当前已调整断言，仍保持受管 Python 和 data 两层包含性检查。该后续测试修正不冒充已通过。

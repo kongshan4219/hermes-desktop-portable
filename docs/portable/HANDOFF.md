@@ -4,6 +4,12 @@
 
 开发分支：`portable/bootstrap-windows-ci`。草稿 [PR #1](https://github.com/kongshan4219/hermes-desktop-portable/pull/1)。默认 main 未合并，未公开发布。以 PR 当前 head 为最新源码 SHA；每个产物记录自身完整 SHA，不能用旧 run 代表当前 head。
 
+最新已验证候选源码 `4610dc2f3ba4a0d738101db526fd6cfc91c31c3a`，[run 36000313369](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/36000313369)：Windows 类型/lint/136 passed + 1 skipped/全部最终 ZIP smoke，以及 Linux 2388 passed + 2 skipped 已通过；独立机器凭据和 local-runtime 尚在运行时进行了以下测试修正，因此不要把整轮称为通过。
+
+该 run 的真实路径证据包含 Windows `RUNNER~1` 短路径，而上游安装器会展开为 `runneradmin`。当前把解释器来源断言改为先用原生文件系统 realpath 规范化，避免将同一目录的 8.3 别名误判为宿主 Python；没有放宽私有目录要求。当前 head 的 CI 重新验证这项修正，准确状态需按 PR head 查询。
+
+该候选 [artifact 10808530391](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/36000313369/artifacts/10808530391) 包含 `Hermes-0.17.6-portable.1-win-x64.zip`，SHA256 `67983df5c583e2e02890c202083e928af6717541cc367e17756bb372f5598c55`，保留 7 天。源码与上述 run 一致，尚未通过完整本地/远程验收。
+
 最新已完成的 run 为 [35997301234](https://github.com/kongshan4219/hermes-desktop-portable/actions/runs/35997301234)，源码 `a52dc422486e4ef9b6313436f4949bb2311ab7ef`。Windows 类型/lint/精选回归/最终 ZIP smoke、Linux 完整平台套件、独立机器凭据恢复全部通过。PS 5.1 Cua 私有安装/version/manifest 检查及真实本地 bootstrap 均已通过；Windows 用户 PATH/HERMES_HOME/Git Bash 与 Cua 任务未改变。
 
 失败点为首次聊天前的界面就绪等待。截图仍显示上游 45 秒连接等待超时的 Retry 界面；此前测试在 bootstrap 完成瞬间只检查一次错误，未等待稍后出现的错误，实际没有点击 Retry。当前改为等待“可交互界面或明确连接超时”后再执行一次正常 Retry；不改变产品超时、安全检查或错误处理。此修正待当前 head 的 CI 验证。

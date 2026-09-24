@@ -113,10 +113,14 @@ async function launchAndBootstrap() {
       p.join(process.env.HERMES_HOME, 'uv-tools', 'browser-use', 'Scripts', 'python.exe')
     ].map(exe => JSON.parse(cp.execFileSync(exe, ['-c', 'import json,sys; print(json.dumps(dict(executable=sys.executable,base=sys.base_prefix)))'], { encoding: 'utf8', timeout: 60000 })))
   })
-  const privatePython = path.join(root, 'data', 'hermes', 'hermes-agent', '.hermes-runtime', 'python').toLowerCase() + path.sep
+  // Windows may expose the same profile as RUNNER~1 and runneradmin. Resolve
+  // actual filesystem identities before checking interpreter containment.
+  const canonical = value => fs.realpathSync.native(value).toLowerCase()
+  const privatePython = canonical(path.join(root, 'data', 'hermes', 'hermes-agent', '.hermes-runtime', 'python')) + path.sep
+  const privateData = canonical(path.join(root, 'data')) + path.sep
   for (const interpreter of interpreters) {
-    assert.ok(interpreter.base.toLowerCase().startsWith(privatePython), 'Tool and Agent interpreters must use private managed Python, never runner Python')
-    assert.ok(interpreter.executable.toLowerCase().startsWith(path.join(root, 'data').toLowerCase() + path.sep))
+    assert.ok(canonical(interpreter.base).startsWith(privatePython), 'Tool and Agent interpreters must use private managed Python, never runner Python')
+    assert.ok(canonical(interpreter.executable).startsWith(privateData))
   }
   mark('Agent and Browser Use interpreters use checkout-private Python')
   await page.waitForSelector('textarea, [contenteditable="true"]', { timeout: 120000 })
